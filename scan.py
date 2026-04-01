@@ -47,7 +47,6 @@ import datetime as dt
 import gzip
 import json
 import logging
-import sys
 from pathlib import Path
 
 from config import TRACKED_ASSETS, STORAGE_DIR
@@ -76,21 +75,22 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
     articles = fetch_news_articles()
     log.info("Fetched %d deduplicated articles for correlation.", len(articles))
 
-    total   = sum(len(assets) for assets in TRACKED_ASSETS.values())
+    total   = sum(len(v) for v in TRACKED_ASSETS.values())
     done    = 0
     errors: list[dict] = []  # the hall of shame
     results: dict      = {}
 
     # processing all 24 assets. this takes a while. go make a coffee. seriously
-    for category, assets in TRACKED_ASSETS.items():
+    for category, asset_map in TRACKED_ASSETS.items():
         results[category] = {}
-        for asset_name, ticker in assets.items():
+        for asset_name, ticker in asset_map.items():
             done += 1
             try:
                 # crunch crunch crunch
                 r = analyse_asset(
                     asset_name, ticker, category, articles,
                     with_market_ctx=False,   # keep scan fast; context optional
+                    save=True,               # scan pipeline is the sole snapshot writer
                 )
                 sig     = r["signal"]
                 metrics = r["metrics"]
@@ -113,11 +113,11 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
                 results[category][asset_name] = entry
 
                 if verbose:
-                    chg   = metrics.get("change_1d") or 0.0
-                    score = sig.get("score", 0.0)
+                    chg       = metrics.get("change_1d") or 0.0
+                    sig_score = sig.get("score", 0.0)
                     log.info(
                         "[%d/%d] %-22s %-20s %+.1f  (%+.2f%%)",
-                        done, total, asset_name, sig.get("label", ""), score, chg,
+                        done, total, asset_name, sig.get("label", ""), sig_score, chg,
                     )
 
             except Exception as exc:
@@ -127,7 +127,7 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
                 errors.append({"asset": asset_name, "category": category, "error": str(exc)})
                 results.setdefault(category, {})[asset_name] = {}
 
-    summary = {
+    scan_result = {
         "scan_date": dt.date.today().isoformat(),
         "scan_time": started,
         "total":     total,
@@ -137,7 +137,7 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
     }
 
     if not dry_run:
-        _save_summary(summary)  # seal it in a zip. like embarrassment in a jar
+        _save_summary(scan_result)  # seal it in a zip. like embarrassment in a jar
         # Apply retention policy on stored per-asset snapshots
         try:
             from storage import apply_retention_policy, cleanup_old_snapshots
@@ -150,9 +150,9 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
 
     log.info(
         "Scan complete: %d/%d assets processed, %d error(s).",
-        summary["succeeded"], total, len(errors),
+        scan_result["succeeded"], total, len(errors),
     )
-    return summary
+    return scan_result
 
 
 def load_last_scan_summary() -> dict:
