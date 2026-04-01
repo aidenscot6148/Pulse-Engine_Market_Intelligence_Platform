@@ -1,0 +1,356 @@
+"""
+storage.py - Lightweight compressed JSON storage for historical signal data.
+
+File naming:
+    market_data/<AssetName>_YYYYMMDD.json.gz
+
+Retention tiers:
+    <= STORAGE_FULL_DETAIL_DAYS  : full snapshot (all fields + headlines)
+    <= STORAGE_REDUCED_DETAIL_DAYS: reduced snapshot (no headlines, fewer fields)
+    >  STORAGE_MAX_DAYS           : deleted by cleanup_old_snapshots()
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import gzip
+import json
+import logging
+from pathlib import Path
+
+from config import (
+    STORAGE_DIR,
+    STORAGE_FULL_DETAIL_DAYS,
+    STORAGE_REDUCED_DETAIL_DAYS,
+    STORAGE_MAX_DAYS,
+    SNAPSHOT_LOAD_LIMIT,
+)
+
+log = logging.getLogger(__name__)
+_storage_path = Path(STORAGE_DIR)
+
+# fields kept in reduced-detail snapshots — the diet version. all the shame, half the data
+_REDUCED_FIELDS = {
+    "asset", "date", "price", "change_1d", "signal_score", "signal_label",
+    "trend", "rsi", "roc_10d", "trend_strength",
+}
+
+
+# Internal helpers
+
+def _ensure_dir() -> None:
+    # make the directory or face consequences
+    _storage_path.mkdir(parents=True, exist_ok=True)
+
+
+def _asset_prefix(asset_name: str) -> str:
+    return asset_name.replace(" ", "_").replace("/", "-").replace("&", "and")
+
+
+def _snapshot_path(asset_name: str, date: dt.date) -> Path:
+    return _storage_path / f"{_asset_prefix(asset_name)}_{date.strftime('%Y%m%d')}.json.gz"
+
+
+def _read_gz(path: Path) -> dict:
+    with gzip.open(path, "rb") as fh:
+        return json.loads(fh.read().decode("utf-8"))
+
+
+def _write_gz(path: Path, data: dict) -> None:
+    raw = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    with gzip.open(path, "wb", compresslevel=6) as fh:
+        fh.write(raw)
+
+
+# Public API
+# what can I say? I am a cheap man.
+
+def save_snapshot(
+    asset_name: str,
+    metrics: dict,
+    momentum: dict,
+    signal: dict,
+    top_headlines: list[dict],
+) -> None:
+    """
+    Persist a lightweight daily snapshot for *asset_name*.
+    Existing file for today is overwritten so latest intraday values win.
+    """
+    _ensure_dir()
+    today = dt.date.today()
+    path  = _snapshot_path(asset_name, today)
+
+    headlines = [
+        {
+            "title":     h.get("title", ""),
+            "source":    h.get("source", ""),
+            "sentiment": round(
+                h.get("sentiment", {}).get("compound", 0.0)
+                if isinstance(h.get("sentiment"), dict)
+                else 0.0,
+                4,
+            ),
+        }
+        for h in top_headlines[:5]
+    ]
+
+    snapshot = {
+        "asset":          asset_name,
+        "date":           today.isoformat(),
+        "price":          metrics.get("latest_price"),
+        "change_1d":      metrics.get("change_1d"),
+        "change_7d":      metrics.get("change_7d"),
+        "change_30d":     metrics.get("change_30d"),
+        "volatility":     metrics.get("volatility"),
+        "trend":          metrics.get("trend"),
+        "rsi":            momentum.get("rsi"),
+        "roc_10d":        momentum.get("roc_10d"),
+        "trend_strength": momentum.get("trend_strength"),
+        "momentum_accel": momentum.get("momentum_accel"),
+        "signal_score":   signal.get("score"),
+        "signal_label":   signal.get("label"),
+        "headlines":      headlines,
+    }
+
+    try:
+        _write_gz(path, snapshot)
+        log.debug("Saved snapshot: %s", path.name)
+    except Exception as exc:
+        log.warning("Snapshot write failed for %s: %s", asset_name, exc)
+
+
+def load_snapshots(asset_name: str, days: int = 30) -> list[dict]:
+    """
+    Return stored snapshots for *asset_name* within the last *days* days,
+    sorted newest-first.
+    """
+    if not _storage_path.exists():
+        return []
+
+    cutoff = dt.date.today() - dt.timedelta(days=days)
+    prefix = _asset_prefix(asset_name)
+    snapshots: list[dict] = []
+
+    for path in _storage_path.glob(f"{prefix}_*.json.gz"):
+        try:
+            date_str = path.name.replace(".json.gz", "").rsplit("_", 1)[-1]
+            date = dt.date.fromisoformat(date_str)
+            if date < cutoff:
+                continue
+            snapshots.append(_read_gz(path))
+        except Exception as exc:
+            log.warning("Snapshot read failed (%s): %s", path.name, exc)
+
+    snapshots.sort(key=lambda s: s.get("date", ""), reverse=True)
+    return snapshots
+
+
+def load_recent_snapshots(
+    asset_name: str,
+    limit: int = SNAPSHOT_LOAD_LIMIT,
+) -> list[dict]:
+    """
+    Return the most recent *limit* snapshots for *asset_name*,
+    regardless of how old they are.  Sorted newest-first.
+    Loading only a fixed slice keeps memory usage bounded.
+    """
+    if not _storage_path.exists():
+        return []
+
+    prefix = _asset_prefix(asset_name)
+    candidates: list[tuple[dt.date, Path]] = []
+
+    for path in _storage_path.glob(f"{prefix}_*.json.gz"):
+        try:
+            date_str = path.name.replace(".json.gz", "").rsplit("_", 1)[-1]
+            date = dt.date.fromisoformat(date_str)
+            candidates.append((date, path))
+        except ValueError:
+            pass
+
+    # Sort newest-first, take only last `limit` files
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    candidates = candidates[:limit]
+
+    snapshots: list[dict] = []
+    for _, path in candidates:
+        try:
+            snapshots.append(_read_gz(path))
+        except Exception as exc:
+            log.warning("Snapshot read failed (%s): %s", path.name, exc)
+
+    snapshots.sort(key=lambda s: s.get("date", ""), reverse=True)
+    return snapshots
+
+
+def get_historical_features(
+    asset_name: str,
+    limit: int = SNAPSHOT_LOAD_LIMIT,
+) -> dict:
+    """
+    Derive historical context features from stored snapshots.
+
+    Returns:
+        signal_consistency  — fraction of last N signals pointing same direction as latest
+        trend_persistence   — consecutive days current trend has held
+        today_vs_yesterday  — dict comparing latest two snapshots on key fields
+        available           — number of snapshots found
+    """
+    snaps = load_recent_snapshots(asset_name, limit)
+
+    empty = {
+        "signal_consistency": None,
+        "trend_persistence":  0,
+        "today_vs_yesterday": {},
+        "available":          len(snaps),
+    }
+
+    if len(snaps) < 2:
+        return empty
+
+    # Signal consistency
+    latest_score = snaps[0].get("signal_score", 0) or 0
+    if latest_score > 0:
+        latest_dir = 1
+    elif latest_score < 0:
+        latest_dir = -1
+    else:
+        latest_dir = 0
+
+    if latest_dir != 0:
+        same_dir = sum(
+            1 for s in snaps
+            if (
+                1 if (s.get("signal_score") or 0) > 0
+                else -1 if (s.get("signal_score") or 0) < 0
+                else 0
+            ) == latest_dir
+        )
+        signal_consistency = round(same_dir / len(snaps), 3)
+    else:
+        signal_consistency = None
+
+    # Trend persistence: consecutive days with the same trend label
+    latest_trend = snaps[0].get("trend", "")
+    trend_persistence = 0
+    for s in snaps:
+        if s.get("trend") == latest_trend and latest_trend:
+            trend_persistence += 1
+        else:
+            break
+
+    # Today vs yesterday for key scalar fields
+    today_snap     = snaps[0]
+    yesterday_snap = snaps[1]
+    compare_fields = ["price", "signal_score", "rsi", "roc_10d", "trend_strength"]
+    today_vs_yesterday: dict[str, dict] = {}
+    for field in compare_fields:
+        t_val = today_snap.get(field)
+        y_val = yesterday_snap.get(field)
+        if t_val is not None and y_val is not None:
+            try:
+                today_vs_yesterday[field] = {
+                    "today":     t_val,
+                    "yesterday": y_val,
+                    "change":    round(float(t_val) - float(y_val), 4),
+                }
+            except (TypeError, ValueError):
+                pass
+
+    return {
+        "signal_consistency":  signal_consistency,
+        "trend_persistence":   trend_persistence,
+        "today_vs_yesterday":  today_vs_yesterday,
+        "available":           len(snaps),
+    }
+
+
+def apply_retention_policy() -> int:
+    """
+    Re-write older snapshots to reduced-detail format to save space.
+    # spring cleaning but for market data. Marie Kondo said delete anything that doesn't spark joy
+    Snapshots between STORAGE_FULL_DETAIL_DAYS+1 and STORAGE_REDUCED_DETAIL_DAYS
+    days old are stripped of heavy fields (headlines, change_7d, change_30d,
+    volatility, momentum_accel) if they still contain those fields.
+
+    Returns the number of snapshots rewritten.
+    """
+    if not _storage_path.exists():
+        return 0
+
+    today    = dt.date.today()
+    full_cutoff    = today - dt.timedelta(days=STORAGE_FULL_DETAIL_DAYS)
+    reduced_cutoff = today - dt.timedelta(days=STORAGE_REDUCED_DETAIL_DAYS)
+    rewritten = 0
+
+    for path in _storage_path.glob("*.json.gz"):
+        if path.name.startswith("_"):
+            continue  # skip meta files like _scan_summary.json.gz
+        try:
+            date_str = path.name.replace(".json.gz", "").rsplit("_", 1)[-1]
+            date = dt.date.fromisoformat(date_str)
+        except ValueError:
+            continue
+
+        # Only target: older than full-detail window, within reduced window
+        if date >= full_cutoff or date < reduced_cutoff:
+            continue
+
+        try:
+            data = _read_gz(path)
+            if "headlines" not in data and "change_7d" not in data:
+                continue  # already reduced, skip
+            reduced = {k: v for k, v in data.items() if k in _REDUCED_FIELDS}
+            _write_gz(path, reduced)
+            rewritten += 1
+            log.debug("Applied reduced retention to %s", path.name)
+        except Exception as exc:
+            log.warning("Retention policy failed for %s: %s", path.name, exc)
+
+    if rewritten:
+        log.info("Retention policy: rewrote %d snapshot(s) to reduced detail.", rewritten)
+    return rewritten
+
+
+def cleanup_old_snapshots(days_to_keep: int = STORAGE_MAX_DAYS) -> int:
+    """
+    Delete snapshots older than *days_to_keep*.
+    Returns the number of files deleted.
+    """
+    # out with the old. delete delete delete. no mercy. no refunds
+    if not _storage_path.exists():
+        return 0
+
+    cutoff  = dt.date.today() - dt.timedelta(days=days_to_keep)
+    deleted = 0
+
+    for path in _storage_path.glob("*.json.gz"):
+        if path.name.startswith("_"):
+            continue
+        try:
+            date_str = path.name.replace(".json.gz", "").rsplit("_", 1)[-1]
+            if dt.date.fromisoformat(date_str) < cutoff:
+                path.unlink()
+                deleted += 1
+        except (ValueError, OSError):
+            pass
+
+    if deleted:
+        log.info("Cleaned up %d old snapshot(s).", deleted)
+    return deleted
+
+
+def list_tracked_assets_with_history() -> list[str]:
+    """Return asset names that have at least one stored snapshot."""
+    if not _storage_path.exists():
+        return []
+    names: set[str] = set()
+    for path in _storage_path.glob("*.json.gz"):
+        if path.name.startswith("_"):
+            continue
+        try:
+            data = _read_gz(path)
+            names.add(data.get("asset", ""))
+        except (OSError, ValueError, KeyError):
+            pass
+    return sorted(n for n in names if n)
