@@ -1213,3 +1213,33 @@ st.caption(
     "Yahoo Finance (prices) + Public RSS (news) + VADER (sentiment)  ·  "
     "This is not financial advice."
 )
+
+# ── Easter egg ───────────────────────────────────────────────────────────────
+# a tiny "·" button hiding in the footer. clicking it 5 times fast does something.
+# does not affect any real functionality. purely for the chaos goblins among us.
+
+_EGG_LIMIT     = 5      # clicks needed
+_EGG_WINDOW    = 2.0    # seconds; reset counter if gap exceeds this
+_EGG_URL       = "https://www.youtube.com/watch?v=QDia3e12czc"
+
+if "_egg_count" not in st.session_state:
+    st.session_state["_egg_count"] = 0
+if "_egg_ts" not in st.session_state:
+    st.session_state["_egg_ts"] = 0.0
+
+# the button itself: a grey mid-dot in the footer — looks like punctuation, acts like a trap
+if st.button("·", key="_egg_btn", help="", type="tertiary"):
+    _now = time.time()
+    if _now - st.session_state["_egg_ts"] > _EGG_WINDOW:
+        st.session_state["_egg_count"] = 1          # gap too long — restart sequence
+    else:
+        st.session_state["_egg_count"] += 1
+    st.session_state["_egg_ts"] = _now
+
+if st.session_state["_egg_count"] >= _EGG_LIMIT:
+    st.session_state["_egg_count"] = 0              # reset so it doesn't loop
+    st.markdown(
+        f'<a href="{_EGG_URL}" target="_blank" style="color:#0e1117;font-size:1px">·</a>',
+        unsafe_allow_html=True,
+    )
+    st.toast("never gonna give you up 🎷", icon="🎷")
