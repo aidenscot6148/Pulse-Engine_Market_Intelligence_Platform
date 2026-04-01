@@ -13,7 +13,7 @@
 
 _LINK TO LIVE DEPLOYMENT: [HERE!!!](https://lemarketintelligenceplatform-vsr4ernrtqqduydam2onapp.streamlit.app/)_
 
-<img width="1915" height="807" alt="1" src="https://github.com/user-attachments/assets/dabd6a8f-151a-4f07-83ff-8d4d2b6acf8b" />
+![dashboard1](https://github.com/user-attachments/assets/efe48c7c-8acb-40c7-8cea-2ece6d4ab30c)
 
 ---
 
