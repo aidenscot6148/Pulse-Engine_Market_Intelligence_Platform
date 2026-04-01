@@ -172,11 +172,11 @@ def load_last_scan_summary() -> dict:
 
 # ── Internal ─────────────────────────────────────────────────────
 
-def _save_summary(summary: dict) -> None:
+def _save_summary(payload: dict) -> None:
     """Write hierarchical scan summary to compressed JSON."""
     try:
         _SUMMARY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        raw = json.dumps(summary, ensure_ascii=False, default=str).encode("utf-8")
+        raw = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
         with gzip.open(_SUMMARY_FILE, "wb", compresslevel=6) as fh:
             fh.write(raw)
         log.info("Scan summary saved: %s", _SUMMARY_FILE)
@@ -207,20 +207,20 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    summary = run_scan(verbose=not args.quiet, dry_run=args.dry_run)
+    scan_summary = run_scan(verbose=not args.quiet, dry_run=args.dry_run)
 
     print()
     print("=" * 65)
-    print(f"  Market Scan — {summary['scan_date']}")
-    print(f"  Assets processed: {summary['succeeded']}/{summary['total']}")
-    if summary["errors"]:
-        print(f"  Errors ({len(summary['errors'])}):")
-        for e in summary["errors"]:
+    print(f"  Market Scan — {scan_summary['scan_date']}")
+    print(f"  Assets processed: {scan_summary['succeeded']}/{scan_summary['total']}")
+    if scan_summary["errors"]:
+        print(f"  Errors ({len(scan_summary['errors'])}):")
+        for e in scan_summary["errors"]:
             print(f"    [{e['category']}] {e['asset']}: {e['error']}")
     print()
     print("  Top signals by magnitude:")
     all_sigs: list[tuple] = []
-    for cat, assets in summary["results"].items():
+    for cat, assets in scan_summary["results"].items():
         for name, data in assets.items():
             score = data.get("signal_score")
             if score is not None:
