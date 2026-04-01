@@ -24,6 +24,8 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 
@@ -69,6 +71,9 @@ from config import (
     SIGNAL_THRESHOLDS,
     DEDUP_SIMILARITY_THRESHOLD,
     MAX_WORKERS,
+    PRICE_FETCH_WORKERS,
+    YFINANCE_REQUEST_DELAY,
+    YFINANCE_BACKOFF_BASE,
     ASSET_CLASS_WEIGHTS,
 )
 
@@ -79,6 +84,9 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger(__name__)
+
+# bouncer at the Yahoo Finance nightclub. only PRICE_FETCH_WORKERS get in at a time. no exceptions
+_yf_semaphore = threading.Semaphore(PRICE_FETCH_WORKERS)
 
 # Behold, my great work, the sentiment robot to understand money words
 # I am teaching a machine to sin!
@@ -112,15 +120,18 @@ def fetch_price_history(
     # politely asking yahoo finance for data. they might say no. they often do
     end   = dt.datetime.now()
     start = end - dt.timedelta(days=days)
-    for attempt in range(1, MAX_RETRIES + 1):  # MAX_RETRIES = 2. i tried twice and gave up. classic
+    for attempt in range(1, MAX_RETRIES + 1):  # MAX_RETRIES = 3. third time's the charm. it's not, but hope springs eternal
         try:
-            data = yf.download(
-                ticker,
-                start=start.strftime("%Y-%m-%d"),
-                end=end.strftime("%Y-%m-%d"),
-                progress=False,
-                timeout=REQUEST_TIMEOUT,
-            )
+            with _yf_semaphore:  # only PRICE_FETCH_WORKERS callers at a time. the rest wait outside in the rain
+                data = yf.download(
+                    ticker,
+                    start=start.strftime("%Y-%m-%d"),
+                    end=end.strftime("%Y-%m-%d"),
+                    progress=False,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                time.sleep(YFINANCE_REQUEST_DELAY)  # be polite. wait 0.75s. Yahoo is watching
+
             if data is None or data.empty:
                 log.warning("Empty data for %s (attempt %d/%d)",
                             ticker, attempt, MAX_RETRIES)
@@ -129,8 +140,17 @@ def fetch_price_history(
                 data.columns = data.columns.get_level_values(0)
             return data
         except Exception as exc:
-            log.error("Fetch error for %s (attempt %d/%d): %s",
-                      ticker, attempt, MAX_RETRIES, exc)
+            exc_str = str(exc).lower()
+            # rate limit or HTTP 429? sleep longer. we angered the beast
+            is_rate_limit = any(k in exc_str for k in ("rate", "429", "too many", "ratelimit"))
+            backoff = YFINANCE_BACKOFF_BASE * (2 ** (attempt - 1)) * (3 if is_rate_limit else 1)
+            log.error(
+                "Fetch error for %s (attempt %d/%d): %s%s",
+                ticker, attempt, MAX_RETRIES, exc,
+                f" — rate limited, backing off {backoff:.1f}s" if is_rate_limit else "",
+            )
+            if attempt < MAX_RETRIES:
+                time.sleep(backoff)
     return None
 
 
@@ -704,7 +724,7 @@ def analyse_market_context(
         return peer_name, peer_m.get("change_1d")
 
     if peers:
-        with ThreadPoolExecutor(max_workers=min(len(peers), MAX_WORKERS)) as ex:
+        with ThreadPoolExecutor(max_workers=min(len(peers), PRICE_FETCH_WORKERS)) as ex:
             for name, chg in ex.map(lambda p: _fetch_peer(p), peers):
                 peer_data[name] = chg
 
@@ -1436,7 +1456,7 @@ def fetch_all_metrics_parallel(days: int = LOOKBACK_DAYS) -> dict:
         for name, tkr in assets.items()
     ]
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+    with ThreadPoolExecutor(max_workers=PRICE_FETCH_WORKERS) as ex:
         futures = {
             ex.submit(_fetch_one_asset, cat, name, tkr, days): (cat, name)
             for cat, name, tkr in all_assets
@@ -1470,7 +1490,7 @@ def run_full_scan() -> dict:
             analyse_asset(name, ticker, category, articles, with_market_ctx=True),
         )
 
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
+    with ThreadPoolExecutor(max_workers=PRICE_FETCH_WORKERS) as ex:
         futures = {
             ex.submit(_run, name, tkr, cat): (cat, name)
             for name, tkr, cat in [(t[0], t[1], t[2]) for t in all_tasks]
