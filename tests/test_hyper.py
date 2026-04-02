@@ -1,4 +1,5 @@
 """
+THIS TEST FOLDER IS AI GENERATED AND A PLACEHOLDER. IT WILL BE IMPROVED AND IMPLEMENTED AS IT GOES ON MANUALLY
 test_hyper.py — Surgical precision tests. OFF BY DEFAULT.
 
 These tests are skipped in all normal runs including CI.
