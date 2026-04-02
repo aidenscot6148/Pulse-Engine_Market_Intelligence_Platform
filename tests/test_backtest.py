@@ -1,4 +1,5 @@
 """
+THIS TEST FOLDER IS AI GENERATED AND A PLACEHOLDER. IT WILL BE IMPROVED AND IMPLEMENTED AS IT GOES ON MANUALLY.
 test_backtest.py — Contract tests for evaluate_signal_accuracy().
 
 All tests use the storage_dir fixture (hermetic tmp_path storage).
