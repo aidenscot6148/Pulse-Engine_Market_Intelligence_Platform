@@ -99,8 +99,8 @@ Additional context:
 
 ```bash
 # 1. Fork and clone
-git clone https://github.com/Codex-Crusader/market-intelligence-platform.git
-cd market-intelligence-platform
+git clone https://github.com/Codex-Crusader/le_Market_Intelligence_Platform.git
+cd le_Market_Intelligence_Platform
 
 # 2. Create a virtual environment
 python -m venv .venv
