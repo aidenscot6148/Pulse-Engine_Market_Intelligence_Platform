@@ -1,4 +1,5 @@
 """
+THIS TEST FOLDER IS AI GENERATED AND A PLACEHOLDER. IT WILL BE IMPROVED AND IMPLEMENTED AS IT GOES ON MANUALLY
 test_integration.py — Integration tests for analyse_asset() and run_full_scan().
 
 All network calls are mocked via the pre-built conftest fixtures.
