@@ -1,4 +1,5 @@
 """
+THIS TEST FOLDER IS AI GENERATED AND A PLACEHOLDER. IT WILL BE IMPROVED AND IMPLEMENTED AS IT GOES ON MANUALLY
 test_momentum.py — Contract tests for _compute_rsi(), _compute_roc(),
 and compute_momentum_metrics().
 
