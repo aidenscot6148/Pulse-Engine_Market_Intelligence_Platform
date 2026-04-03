@@ -1,4 +1,4 @@
-# Contributing to Market Intelligence Platform
+# Contributing to PulseEngine
 
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square)](https://github.com/your-username/market-intelligence-platform/pulls)
 [![Issues](https://img.shields.io/badge/Issues-Open-blue?style=flat-square)](https://github.com/your-username/market-intelligence-platform/issues)
