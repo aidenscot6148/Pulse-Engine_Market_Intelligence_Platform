@@ -9,7 +9,7 @@ All network calls are mocked via conftest fixtures.
 
 from __future__ import annotations
 
-from conftest import analyse_asset, run_full_scan, APP_MODULE
+from app import analyse_asset, run_full_scan
 
 
 # ── analyse_asset ─────────────────────────────────────────────────────────────
@@ -32,7 +32,7 @@ def test_analyse_asset_has_signal_in_range(mock_price_history, storage_dir, synt
 
 def test_analyse_asset_no_price_data_does_not_crash(mocker, storage_dir, synthetic_articles):
     """When price fetch returns None, the pipeline must still return a dict (not raise)."""
-    mocker.patch(APP_MODULE + ".fetch_price_history", return_value=None)
+    mocker.patch("app.fetch_price_history", return_value=None)
     result = analyse_asset("Gold", "GC=F", "Commodities", synthetic_articles,
                            with_market_ctx=False)
     assert isinstance(result, dict)
