@@ -602,72 +602,49 @@ if _scan_time:
     except (ValueError, TypeError):
         pass
 
-history  = cached_history(ticker)
-articles = cached_news()
+snap         = _summary_results.get(selected_category, {}).get(selected_asset, {})
+_live_loaded = st.session_state.get("_live_for") == ticker
+_news_loaded = st.session_state.get("_news_for") == ticker
 
-if history.empty:
-    st.error(
-        f"Could not load price data for **{selected_asset}** (`{ticker}`). "
-        "Yahoo Finance may be temporarily unreachable. Try refreshing."
-    )
-    st.stop()
+#  SECTION 1 — Signal (from scan snapshot)
 
-metrics    = compute_price_metrics(history)
-momentum   = compute_momentum_metrics(history)
-news       = correlate_news(selected_asset, articles)
-clusters   = cluster_articles(news)
-disp_clust = get_display_clusters(news, max_clusters=2)
-
-market_ctx = None
-if run_context and metrics.get("change_1d") is not None:
-    with st.spinner("Analysing market context (peers + benchmark) ..."):
-        market_ctx = analyse_market_context(
-            selected_asset, selected_category, metrics["change_1d"]
-        )
-
-signal      = compute_signal_score(
-    metrics, momentum, news, market_ctx, category=selected_category
-)
-explanation = build_explanation(
-    selected_asset, metrics, news, market_ctx, momentum, signal
-)
-
-#  SECTION 1 — Signal (prominent, top of page)
-
-sig_score = signal.get("score", 0.0)
-sig_label = signal.get("label", "Neutral")
-conf      = explanation["confidence"]
+sig_score  = float(snap.get("signal_score") or 0.0)
+sig_label  = snap.get("signal_label") or "Neutral"
+conf       = snap.get("confidence") or "low"
 conf_class = {"high": "conf-high", "medium": "conf-medium"}.get(conf, "conf-low")
 conf_label = conf.upper()
 
 _signal_class_map = {
-    "Strong Bullish":  "signal-strong-bull",
-    "Bullish":         "signal-bull",
+    "Strong Bullish":   "signal-strong-bull",
+    "Bullish":          "signal-bull",
     "Slightly Bullish": "signal-slight-bull",
-    "Neutral":         "signal-neutral",
+    "Neutral":          "signal-neutral",
     "Slightly Bearish": "signal-slight-bear",
-    "Bearish":         "signal-bear",
-    "Strong Bearish":  "signal-strong-bear",
+    "Bearish":          "signal-bear",
+    "Strong Bearish":   "signal-strong-bear",
 }
 sig_css = _signal_class_map.get(sig_label, "signal-neutral")
 
-chg_1d         = metrics.get("change_1d")
+chg_1d         = snap.get("change_1d")
 is_significant = chg_1d is not None and abs(chg_1d) >= PRICE_CHANGE_THRESHOLD
 
 sig_col, spacer = st.columns([2, 3])
 with sig_col:
-    st.markdown(
-        f'<div class="signal-card {sig_css}">'
-        f'<div class="signal-label-text">{sig_label}'
-        f'<span class="confidence-badge {conf_class}">Confidence: {conf_label}</span>'
-        f'</div>'
-        f'<div class="signal-score-text">Score: {sig_score:+.1f} / 10'
-        f'&nbsp;&nbsp;&middot;&nbsp;&nbsp;'
-        f'<span style="font-size:0.9rem;opacity:0.7">{selected_category}</span>'
-        f'</div>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+    if snap:
+        st.markdown(
+            f'<div class="signal-card {sig_css}">'
+            f'<div class="signal-label-text">{sig_label}'
+            f'<span class="confidence-badge {conf_class}">Confidence: {conf_label}</span>'
+            f'</div>'
+            f'<div class="signal-score-text">Score: {sig_score:+.1f} / 10'
+            f'&nbsp;&nbsp;&middot;&nbsp;&nbsp;'
+            f'<span style="font-size:0.9rem;opacity:0.7">{selected_category}</span>'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("No snapshot data yet — run a full scan from the sidebar.")
 
 if is_significant:
     verb = "surged" if chg_1d > 0 else "dropped"
@@ -676,130 +653,60 @@ if is_significant:
     )
 
 
+#  SECTION 2 — Why it matters (from scan snapshot)
 
-#  SECTION 2 — Why it matters
-
-why = explanation.get("why_it_matters", "")
-verdict = explanation.get("verdict", "")
-
-if why or verdict:
-    combined = verdict
-    if why and why != verdict:
-        combined = f"{verdict}  {why}"
+verdict = snap.get("verdict", "")
+if verdict:
     st.markdown(
         f'<div class="why-box">'
         f'<div class="why-label">Why it matters</div>'
-        f'{combined}'
+        f'{verdict}'
         f'</div>',
         unsafe_allow_html=True,
     )
 
 
-
-#  SECTION 3 - Primary driver
-
-factors = explanation.get("factors", [])
-event_factors   = [f for f in factors if f["type"] == "event"]
-context_factors = [f for f in factors if f["type"] in ("market_wide", "sector_wide", "asset_specific")]
-primary_driver = next(iter(event_factors or context_factors or factors), None)
-
-if primary_driver:
-    st.markdown(
-        f'<div class="driver-box">'
-        f'<div class="driver-label">Primary driver</div>'
-        f'<strong>{primary_driver["label"]}</strong>'
-        + (f' — {primary_driver["detail"]}' if primary_driver.get("detail") else "")
-        + f'</div>',
-        unsafe_allow_html=True,
-    )
-
-# Factor pills (supporting factors)
-if factors:
-    warn_types  = {"rsi_overbought", "rsi_oversold", "sentiment_diverged", "volatility"}
-    pills_html  = "".join(
-        f'<span class="factor-pill'
-        f'{" factor-pill-warn" if f["type"] in warn_types else ""}">'
-        f'{f["label"]}</span>'
-        for f in factors
-    )
-    st.markdown(f"**Contributing factors:** {pills_html}", unsafe_allow_html=True)
-
-
-#  SECTION 4 — Contradictions / risks
-
-contradictions = explanation.get("contradictions", [])
-if contradictions:
-    with st.expander(f"Risks and contradictions ({len(contradictions)})"):
-        for c in contradictions:
-            st.markdown(
-                f'<div class="contra-box">'
-                f'<strong>{c["type"].replace("_", " ").title()}:</strong> '
-                f'{c["description"]}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-
-#  SECTION 5 — Confidence reasoning
-
-conf_info = explanation.get("confidence_info", {})
-if conf_info.get("increases") or conf_info.get("decreases"):
-    with st.expander("Confidence reasoning"):
-        if conf_info.get("increases"):
-            st.markdown("**Increases confidence:**")
-            for r in conf_info["increases"]:
-                st.markdown(f"- {r}")
-        if conf_info.get("decreases"):
-            st.markdown("**Decreases confidence:**")
-            for r in conf_info["decreases"]:
-                st.markdown(f"- {r}")
-        st.caption(f"Confidence score: {conf_info.get('score', 0)} / 12")
-
-
-#  SECTION 6 — Metric cards + Momentum row
+#  SECTION 3 — Metric cards + Momentum row (from scan snapshot)
 
 st.markdown("---")
 
-mc1, mc2, mc3, mc4, mc5 = st.columns(5)
-with mc1:
-    st.metric(
-        "Price",
-        f"${metrics.get('latest_price', 0):,.2f}",
-        delta=(
-            f"{metrics['change_1d']:+.2f}% (24h)"
-            if metrics.get("change_1d") is not None else None
-        ),
-    )
-with mc2:
-    v7 = metrics.get("change_7d")
-    st.metric("7-Day", f"{v7:+.2f}%" if v7 is not None else "N/A")
-with mc3:
-    v30 = metrics.get("change_30d")
-    st.metric("30-Day", f"{v30:+.2f}%" if v30 is not None else "N/A")
-with mc4:
-    st.metric("Volatility", f"{metrics.get('volatility', 0):.2f}%")
-with mc5:
-    trend = metrics.get("trend", "sideways")
-    st.metric("Trend", trend.title())
+if snap:
+    mc1, mc2, mc3, mc4, mc5 = st.columns(5)
+    price = snap.get("price") or 0
+    with mc1:
+        st.metric(
+            "Price",
+            f"${price:,.2f}",
+            delta=(f"{chg_1d:+.2f}% (24h)" if chg_1d is not None else None),
+        )
+    with mc2:
+        v7 = snap.get("change_7d")
+        st.metric("7-Day", f"{v7:+.2f}%" if v7 is not None else "N/A")
+    with mc3:
+        st.metric("30-Day", "—")
+    with mc4:
+        st.metric("Volatility", "—")
+    with mc5:
+        trend = snap.get("trend") or "sideways"
+        st.metric("Trend", trend.title())
 
-m1, m2, m3, m4 = st.columns(4)
-rsi    = momentum.get("rsi", 50.0)
-roc    = momentum.get("roc_10d", 0.0)
-ts     = momentum.get("trend_strength", 0.0)
-maccel = momentum.get("momentum_accel", 0.0)
-
-with m1:
-    rsi_delta = "Overbought" if rsi > 70 else "Oversold" if rsi < 30 else None
-    st.metric("RSI (14-day)", f"{rsi:.1f}", delta=rsi_delta)
-with m2:
-    st.metric("10-day ROC", f"{roc:+.2f}%")
-with m3:
-    st.metric("Trend Strength", f"{ts:+.2f}%", help="MA7 vs MA30 divergence")
-with m4:
-    st.metric("Momentum Accel", f"{maccel:+.2f}%", help="Recent 5d ROC minus prior 5d ROC")
+    m1, m2, m3, m4 = st.columns(4)
+    rsi = float(snap.get("rsi") or 50.0)
+    roc = float(snap.get("roc_10d") or 0.0)
+    with m1:
+        rsi_delta = "Overbought" if rsi > 70 else "Oversold" if rsi < 30 else None
+        st.metric("RSI (14-day)", f"{rsi:.1f}", delta=rsi_delta)
+    with m2:
+        st.metric("10-day ROC", f"{roc:+.2f}%")
+    with m3:
+        st.metric("Trend Strength", "—")
+    with m4:
+        st.metric("Momentum Accel", "—")
+else:
+    st.info("Run a full scan to populate metric data.")
 
 
-#  SECTION 7 — Top news clusters (1-2, prominent)
+#  SECTION 4 — News (deferred behind explicit user action)
 
 st.markdown("---")
 
@@ -846,295 +753,383 @@ def _render_article(item: dict) -> None:
     )
 
 
-clusters_data = disp_clust["clusters"]
-suppressed    = disp_clust["suppressed_count"]
-total_news    = len(news)
-
-if not news:
-    st.markdown("## Related News")
-    st.info("No recent articles matched this asset. Try a different one.")
-elif clusters_data:
-    cluster_count = len(clusters_data)
-    st.markdown(
-        f"## Related News — Top {cluster_count} Cluster{'s' if cluster_count > 1 else ''}"
-        + (f" ({suppressed} low-relevance article(s) suppressed)" if suppressed > 0 else "")
-    )
-
-    for cluster in clusters_data:
-        sent_summary = cluster["sentiment_summary"]
-        sent_color_c = (
-            "#00e676" if cluster["avg_sentiment"] > 0.05
-            else "#ff5252" if cluster["avg_sentiment"] < -0.05
-            else "#8892a0"
-        )
-        st.markdown(
-            f'<div class="cluster-card">'
-            f'<div class="cluster-header-row">'
-            f'<span class="cluster-title">{cluster["label"]}</span>'
-            f'<span class="cluster-meta">'
-            f'{cluster["count"]} article{"s" if cluster["count"] != 1 else ""}'
-            f' &middot; sentiment: '
-            f'<span style="color:{sent_color_c}">{sent_summary}</span>'
-            f'</span>'
-            f'</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-        for art in cluster["articles"][:3]:
-            _render_article(art)
-
-    # Remaining articles in an expander
-    shown_set = {
-        id(a)
-        for c in clusters_data
-        for a in c["articles"][:3]
-    }
-    remaining = [a for a in news if id(a) not in shown_set]
-    if remaining:
-        with st.expander(f"More articles ({len(remaining)} remaining)"):
-            for art in remaining[:10]:
-                _render_article(art)
+if not _news_loaded:
+    st.markdown("### Related News")
+    if st.button("Load news feed", key="_news_btn"):
+        st.session_state["_news_for"] = ticker
+        st.rerun()
+    st.caption("News is not fetched on startup. Click above to load from 12 RSS feeds.")
 else:
-    # No meaningful clustering — render flat
-    st.markdown(f"## Related News ({total_news} articles)")
-    for article in news[:10]:
-        _render_article(article)
+    articles   = cached_news()
+    news       = correlate_news(selected_asset, articles)
+    clusters   = cluster_articles(news)
+    disp_clust = get_display_clusters(news, max_clusters=2)
+
+    clusters_data = disp_clust["clusters"]
+    suppressed    = disp_clust["suppressed_count"]
+    total_news    = len(news)
+
+    if not news:
+        st.markdown("## Related News")
+        st.info("No recent articles matched this asset. Try a different one.")
+    elif clusters_data:
+        cluster_count = len(clusters_data)
+        st.markdown(
+            f"## Related News — Top {cluster_count} Cluster{'s' if cluster_count > 1 else ''}"
+            + (f" ({suppressed} low-relevance article(s) suppressed)" if suppressed > 0 else "")
+        )
+
+        for cluster in clusters_data:
+            sent_summary = cluster["sentiment_summary"]
+            sent_color_c = (
+                "#00e676" if cluster["avg_sentiment"] > 0.05
+                else "#ff5252" if cluster["avg_sentiment"] < -0.05
+                else "#8892a0"
+            )
+            st.markdown(
+                f'<div class="cluster-card">'
+                f'<div class="cluster-header-row">'
+                f'<span class="cluster-title">{cluster["label"]}</span>'
+                f'<span class="cluster-meta">'
+                f'{cluster["count"]} article{"s" if cluster["count"] != 1 else ""}'
+                f' &middot; sentiment: '
+                f'<span style="color:{sent_color_c}">{sent_summary}</span>'
+                f'</span>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            for art in cluster["articles"][:3]:
+                _render_article(art)
+
+        shown_set = {
+            id(a)
+            for c in clusters_data
+            for a in c["articles"][:3]
+        }
+        remaining = [a for a in news if id(a) not in shown_set]
+        if remaining:
+            with st.expander(f"More articles ({len(remaining)} remaining)"):
+                for art in remaining[:10]:
+                    _render_article(art)
+    else:
+        st.markdown(f"## Related News ({total_news} articles)")
+        for article in news[:10]:
+            _render_article(article)
 
 
-#  SECTION 8 - Price chart
+#  SECTION 5 — Price chart & live analysis (deferred behind expander)
 
 st.markdown("---")
-st.markdown("### Price History")
-
-close_col = history["Close"]
-if isinstance(close_col, pd.DataFrame):
-    close_col = close_col.iloc[:, 0]
-
-fig = go.Figure()
-fig.add_trace(go.Scatter(
-    x=history.index, y=close_col,
-    mode="lines",
-    line=dict(color="#4fc3f7", width=2.2),
-    fill="tozeroy",
-    fillcolor="rgba(79,195,247,0.07)",
-    name="Close",
-    hovertemplate="$%{y:,.4f}<br>%{x|%b %d}<extra></extra>",
-))
-
-if len(close_col) >= 7:
-    ma7 = close_col.rolling(7).mean()
-    fig.add_trace(go.Scatter(
-        x=history.index, y=ma7,
-        mode="lines",
-        line=dict(color="#ffab40", width=1.4, dash="dash"),
-        name="7d MA",
-        hovertemplate="MA7: $%{y:,.4f}<extra></extra>",
-    ))
-
-if len(close_col) >= 20:
-    ma20 = close_col.rolling(20).mean()
-    fig.add_trace(go.Scatter(
-        x=history.index, y=ma20,
-        mode="lines",
-        line=dict(color="#b39ddb", width=1.2, dash="dot"),
-        name="20d MA",
-        hovertemplate="MA20: $%{y:,.4f}<extra></extra>",
-    ))
-
-fig.update_layout(
-    height=CHART_HEIGHT,
-    margin=dict(l=0, r=0, t=10, b=0),
-    plot_bgcolor="rgba(0,0,0,0)",
-    paper_bgcolor="rgba(0,0,0,0)",
-    xaxis=dict(showgrid=False, color="#8892a0", tickformat="%b %d"),
-    yaxis=dict(
-        showgrid=True,
-        gridcolor="rgba(255,255,255,0.05)",
-        color="#8892a0",
-        tickprefix="$",
-    ),
-    legend=dict(
-        orientation="h", yanchor="bottom", y=1.02,
-        xanchor="right", x=1, font=dict(size=11, color="#8892a0"),
-    ),
-    hovermode="x unified",
-)
-st.plotly_chart(fig, width="stretch")
-
-with st.expander("Volume chart"):
-    if "Volume" in history.columns:
-        vol_col = history["Volume"]
-        if isinstance(vol_col, pd.DataFrame):
-            vol_col = vol_col.iloc[:, 0]
-        vfig = go.Figure(go.Bar(
-            x=history.index, y=vol_col,
-            marker=dict(color="rgba(79,195,247,0.35)"),
-            hovertemplate="%{y:,.0f}<extra></extra>",
-        ))
-        vfig.update_layout(
-            height=200,
-            margin=dict(l=0, r=0, t=0, b=0),
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(showgrid=False, color="#8892a0"),
-            yaxis=dict(showgrid=False, color="#8892a0"),
+with st.expander("Price Chart & Live Analysis", expanded=False):
+    if not _live_loaded:
+        st.caption(
+            "Live price history and deep analysis are not fetched on startup. "
+            "Loads 30-day OHLCV from Yahoo Finance and recomputes all signal components."
         )
-        st.plotly_chart(vfig, width="stretch")
+        if st.button("Load live data", key="_live_btn"):
+            st.session_state["_live_for"] = ticker
+            st.rerun()
     else:
-        st.info("Volume data not available.")
-
-
-#  SECTION 9 — Signal component breakdown
-
-with st.expander("Signal component breakdown"):
-    comps     = signal.get("components", {})
-    raw_comps = signal.get("raw_components", {})
-    if comps:
-        comp_names  = list(comps.keys())
-        comp_values = [comps[k] for k in comp_names]
-        colors      = ["#00e676" if v >= 0 else "#ff5252" for v in comp_values]
-        cfig = go.Figure(go.Bar(
-            x=comp_names,
-            y=comp_values,
-            marker=dict(color=colors),
-            text=[f"{v:+.2f}" for v in comp_values],
-            textposition="outside",
-        ))
-        cfig.update_layout(
-            height=220,
-            margin=dict(l=0, r=0, t=10, b=0),
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(color="#8892a0"),
-            yaxis=dict(
-                color="#8892a0",
-                showgrid=True,
-                gridcolor="rgba(255,255,255,0.05)",
-                range=[-3.5, 3.5],
-            ),
-        )
-        cfig.add_hline(y=0, line_color="#8892a0", line_width=1)
-        st.plotly_chart(cfig, width="stretch")
-        if signal.get("category"):
-            st.caption(
-                f"Per-class weights applied for {signal['category']}. "
-                "Weighted values shown. Each component contributes to the -10 to +10 signal."
+        history = cached_history(ticker)
+        if history.empty:
+            st.error(
+                f"Could not load price data for **{selected_asset}** (`{ticker}`). "
+                "Yahoo Finance may be temporarily unreachable. Try refreshing."
             )
         else:
-            st.caption("Each component contributes to the -10 to +10 composite signal score.")
+            live_metrics  = compute_price_metrics(history)
+            live_momentum = compute_momentum_metrics(history)
 
+            _live_articles: list[dict] = cached_news() if _news_loaded else []
+            live_news = correlate_news(selected_asset, _live_articles)
 
-#  SECTION 10 — Backtest summary
+            market_ctx = None
+            if run_context and live_metrics.get("change_1d") is not None:
+                with st.spinner("Analysing market context (peers + benchmark) ..."):
+                    market_ctx = analyse_market_context(
+                        selected_asset, selected_category, live_metrics["change_1d"]
+                    )
 
-if BACKTEST_AVAILABLE:
-    st.markdown("---")
-    bt = evaluate_signal_accuracy(selected_asset)
-
-    if bt["num_evaluated"] == 0:
-        with st.expander("Signal Backtest (no history yet)"):
-            st.info(
-                bt["message"] + "\n\n"
-                "Snapshots are saved each time this app runs. "
-                "Return after a few days to see backtest results."
+            live_signal      = compute_signal_score(
+                live_metrics, live_momentum, live_news, market_ctx,
+                category=selected_category,
             )
-    else:
-        st.markdown("### Signal Backtest")
-        hit_rate = bt["hit_rate"]
-        streak   = get_signal_streak(bt["details"])
-
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            pct = f"{hit_rate * 100:.1f}%" if hit_rate is not None else "N/A"
-            st.metric("Directional Accuracy", pct)
-        with c2:
-            st.metric("Signals Evaluated", bt["num_evaluated"])
-        with c3:
-            avg_str = f"{bt['avg_signal_score']:+.2f}" if bt["avg_signal_score"] is not None else "N/A"
-            st.metric("Avg Signal Score", avg_str)
-        with c4:
-            if streak["type"] != "none":
-                st.metric("Current Streak", f"{streak['length']} {streak['type'].upper()}")
-
-        st.caption(bt["message"])
-
-        # Label-level accuracy summaries (e.g. "Strong Bullish -> 70% accuracy")
-        if bt.get("label_summaries"):
-            with st.expander("Accuracy by signal label"):
-                for s in bt["label_summaries"]:
-                    st.markdown(f"- {s}")
-
-        # Accuracy by signal strength
-        bss = bt.get("by_signal_strength", {})
-        if bss:
-            with st.expander("Accuracy by signal strength"):
-                for bucket in ("strong", "moderate", "weak"):
-                    if bucket in bss:
-                        st.markdown(f"- {bss[bucket]['summary']}")
-
-        # Detail table
-        if bt["details"]:
-            with st.expander("Signal history (last 15)"):
-                detail_rows = [
-                    {
-                        "Date":      d["date"],
-                        "Signal":    d["signal_label"],
-                        "Score":     d["signal_score"],
-                        "Predicted": d["predicted"],
-                        "Actual":    f"{d['actual_change']:+.2f}% ({d['actual']})",
-                        "Correct":   "Yes" if d["correct"] else "No",
-                    }
-                    for d in bt["details"][:15]
-                ]
-                bt_df     = pd.DataFrame(detail_rows)
-                bt_styled = bt_df.style.map(
-                    lambda v: "color:#00e676" if v == "Yes" else "color:#ff5252" if v == "No" else "",
-                    subset=["Correct"],
-                )
-                st.dataframe(bt_styled, width="stretch", hide_index=True)
-
-
-
-#  SECTION 11 - Historical context (signal consistency)
-if STORAGE_AVAILABLE:
-    hist_feat = get_historical_features(selected_asset)
-    if hist_feat.get("available", 0) >= 2:
-        with st.expander("Historical context"):
-            consistency = hist_feat.get("signal_consistency")
-            persistence = hist_feat.get("trend_persistence", 0)
-            t_vs_y      = hist_feat.get("today_vs_yesterday", {})
-
-            hf_parts = []
-            if consistency is not None:
-                hf_parts.append(
-                    f"Signal consistency over last {hist_feat['available']} snapshots: "
-                    f"**{consistency * 100:.0f}%** pointing same direction as today."
-                )
-            if persistence > 0:
-                hf_parts.append(
-                    f"Trend **{metrics.get('trend', 'unknown')}** has persisted "
-                    f"for **{persistence}** consecutive snapshot(s)."
-                )
-            if t_vs_y.get("signal_score"):
-                d = t_vs_y["signal_score"]
-                direction = "higher" if d["change"] > 0 else "lower" if d["change"] < 0 else "unchanged"
-                hf_parts.append(
-                    f"Signal score today ({d['today']:+.2f}) is **{direction}** "
-                    f"than yesterday ({d['yesterday']:+.2f}, change: {d['change']:+.2f})."
-                )
-
-            for part in hf_parts:
-                st.markdown(part)
-
-            st.caption(
-                f"Based on {hist_feat['available']} stored snapshot(s). "
-                "Snapshots accumulate as the app runs over multiple days."
+            live_explanation = build_explanation(
+                selected_asset, live_metrics, live_news, market_ctx,
+                live_momentum, live_signal,
             )
 
+            # Primary driver
+            live_factors    = live_explanation.get("factors", [])
+            event_factors   = [f for f in live_factors if f["type"] == "event"]
+            context_factors = [f for f in live_factors if f["type"] in ("market_wide", "sector_wide", "asset_specific")]
+            primary_driver  = next(iter(event_factors or context_factors or live_factors), None)
 
-#  SECTION 12 — Full analysis expander
+            if primary_driver:
+                st.markdown(
+                    f'<div class="driver-box">'
+                    f'<div class="driver-label">Primary driver</div>'
+                    f'<strong>{primary_driver["label"]}</strong>'
+                    + (f' — {primary_driver["detail"]}' if primary_driver.get("detail") else "")
+                    + f'</div>',
+                    unsafe_allow_html=True,
+                )
 
-with st.expander("Full Analysis", expanded=is_significant):
-    st.markdown(explanation["detail"])
+            warn_types = {"rsi_overbought", "rsi_oversold", "sentiment_diverged", "volatility"}
+            if live_factors:
+                pills_html = "".join(
+                    f'<span class="factor-pill'
+                    f'{" factor-pill-warn" if f["type"] in warn_types else ""}">'
+                    f'{f["label"]}</span>'
+                    for f in live_factors
+                )
+                st.markdown(f"**Contributing factors:** {pills_html}", unsafe_allow_html=True)
+
+            # Contradictions
+            contradictions = live_explanation.get("contradictions", [])
+            if contradictions:
+                with st.expander(f"Risks and contradictions ({len(contradictions)})"):
+                    for c in contradictions:
+                        st.markdown(
+                            f'<div class="contra-box">'
+                            f'<strong>{c["type"].replace("_", " ").title()}:</strong> '
+                            f'{c["description"]}'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+
+            # Confidence reasoning
+            conf_info = live_explanation.get("confidence_info", {})
+            if conf_info.get("increases") or conf_info.get("decreases"):
+                with st.expander("Confidence reasoning"):
+                    if conf_info.get("increases"):
+                        st.markdown("**Increases confidence:**")
+                        for r in conf_info["increases"]:
+                            st.markdown(f"- {r}")
+                    if conf_info.get("decreases"):
+                        st.markdown("**Decreases confidence:**")
+                        for r in conf_info["decreases"]:
+                            st.markdown(f"- {r}")
+                    st.caption(f"Confidence score: {conf_info.get('score', 0)} / 12")
+
+            # Price chart
+            st.markdown("### Price History")
+            close_col = history["Close"]
+            if isinstance(close_col, pd.DataFrame):
+                close_col = close_col.iloc[:, 0]
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=history.index, y=close_col,
+                mode="lines",
+                line=dict(color="#4fc3f7", width=2.2),
+                fill="tozeroy",
+                fillcolor="rgba(79,195,247,0.07)",
+                name="Close",
+                hovertemplate="$%{y:,.4f}<br>%{x|%b %d}<extra></extra>",
+            ))
+
+            if len(close_col) >= 7:
+                ma7 = close_col.rolling(7).mean()
+                fig.add_trace(go.Scatter(
+                    x=history.index, y=ma7,
+                    mode="lines",
+                    line=dict(color="#ffab40", width=1.4, dash="dash"),
+                    name="7d MA",
+                    hovertemplate="MA7: $%{y:,.4f}<extra></extra>",
+                ))
+
+            if len(close_col) >= 20:
+                ma20 = close_col.rolling(20).mean()
+                fig.add_trace(go.Scatter(
+                    x=history.index, y=ma20,
+                    mode="lines",
+                    line=dict(color="#b39ddb", width=1.2, dash="dot"),
+                    name="20d MA",
+                    hovertemplate="MA20: $%{y:,.4f}<extra></extra>",
+                ))
+
+            fig.update_layout(
+                height=CHART_HEIGHT,
+                margin=dict(l=0, r=0, t=10, b=0),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(showgrid=False, color="#8892a0", tickformat="%b %d"),
+                yaxis=dict(
+                    showgrid=True,
+                    gridcolor="rgba(255,255,255,0.05)",
+                    color="#8892a0",
+                    tickprefix="$",
+                ),
+                legend=dict(
+                    orientation="h", yanchor="bottom", y=1.02,
+                    xanchor="right", x=1, font=dict(size=11, color="#8892a0"),
+                ),
+                hovermode="x unified",
+            )
+            st.plotly_chart(fig, width="stretch")
+
+            with st.expander("Volume chart"):
+                if "Volume" in history.columns:
+                    vol_col = history["Volume"]
+                    if isinstance(vol_col, pd.DataFrame):
+                        vol_col = vol_col.iloc[:, 0]
+                    vfig = go.Figure(go.Bar(
+                        x=history.index, y=vol_col,
+                        marker=dict(color="rgba(79,195,247,0.35)"),
+                        hovertemplate="%{y:,.0f}<extra></extra>",
+                    ))
+                    vfig.update_layout(
+                        height=200,
+                        margin=dict(l=0, r=0, t=0, b=0),
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(showgrid=False, color="#8892a0"),
+                        yaxis=dict(showgrid=False, color="#8892a0"),
+                    )
+                    st.plotly_chart(vfig, width="stretch")
+                else:
+                    st.info("Volume data not available.")
+
+            # Signal component breakdown
+            with st.expander("Signal component breakdown"):
+                comps = live_signal.get("components", {})
+                if comps:
+                    comp_names  = list(comps.keys())
+                    comp_values = [comps[k] for k in comp_names]
+                    colors      = ["#00e676" if v >= 0 else "#ff5252" for v in comp_values]
+                    cfig = go.Figure(go.Bar(
+                        x=comp_names,
+                        y=comp_values,
+                        marker=dict(color=colors),
+                        text=[f"{v:+.2f}" for v in comp_values],
+                        textposition="outside",
+                    ))
+                    cfig.update_layout(
+                        height=220,
+                        margin=dict(l=0, r=0, t=10, b=0),
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        xaxis=dict(color="#8892a0"),
+                        yaxis=dict(
+                            color="#8892a0",
+                            showgrid=True,
+                            gridcolor="rgba(255,255,255,0.05)",
+                            range=[-3.5, 3.5],
+                        ),
+                    )
+                    cfig.add_hline(y=0, line_color="#8892a0", line_width=1)
+                    st.plotly_chart(cfig, width="stretch")
+                    if live_signal.get("category"):
+                        st.caption(
+                            f"Per-class weights applied for {live_signal['category']}. "
+                            "Weighted values shown. Each component contributes to the -10 to +10 signal."
+                        )
+                    else:
+                        st.caption("Each component contributes to the -10 to +10 composite signal score.")
+
+            # Backtest
+            if BACKTEST_AVAILABLE:
+                bt = evaluate_signal_accuracy(selected_asset)
+                if bt["num_evaluated"] == 0:
+                    with st.expander("Signal Backtest (no history yet)"):
+                        st.info(
+                            bt["message"] + "\n\n"
+                            "Snapshots are saved each time this app runs. "
+                            "Return after a few days to see backtest results."
+                        )
+                else:
+                    st.markdown("### Signal Backtest")
+                    hit_rate = bt["hit_rate"]
+                    streak   = get_signal_streak(bt["details"])
+
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1:
+                        pct = f"{hit_rate * 100:.1f}%" if hit_rate is not None else "N/A"
+                        st.metric("Directional Accuracy", pct)
+                    with c2:
+                        st.metric("Signals Evaluated", bt["num_evaluated"])
+                    with c3:
+                        avg_str = f"{bt['avg_signal_score']:+.2f}" if bt["avg_signal_score"] is not None else "N/A"
+                        st.metric("Avg Signal Score", avg_str)
+                    with c4:
+                        if streak["type"] != "none":
+                            st.metric("Current Streak", f"{streak['length']} {streak['type'].upper()}")
+
+                    st.caption(bt["message"])
+
+                    if bt.get("label_summaries"):
+                        with st.expander("Accuracy by signal label"):
+                            for s in bt["label_summaries"]:
+                                st.markdown(f"- {s}")
+
+                    bss = bt.get("by_signal_strength", {})
+                    if bss:
+                        with st.expander("Accuracy by signal strength"):
+                            for bucket in ("strong", "moderate", "weak"):
+                                if bucket in bss:
+                                    st.markdown(f"- {bss[bucket]['summary']}")
+
+                    if bt["details"]:
+                        with st.expander("Signal history (last 15)"):
+                            detail_rows = [
+                                {
+                                    "Date":      d["date"],
+                                    "Signal":    d["signal_label"],
+                                    "Score":     d["signal_score"],
+                                    "Predicted": d["predicted"],
+                                    "Actual":    f"{d['actual_change']:+.2f}% ({d['actual']})",
+                                    "Correct":   "Yes" if d["correct"] else "No",
+                                }
+                                for d in bt["details"][:15]
+                            ]
+                            bt_df     = pd.DataFrame(detail_rows)
+                            bt_styled = bt_df.style.map(
+                                lambda v: "color:#00e676" if v == "Yes" else "color:#ff5252" if v == "No" else "",
+                                subset=["Correct"],
+                            )
+                            st.dataframe(bt_styled, width="stretch", hide_index=True)
+
+            # Historical context
+            if STORAGE_AVAILABLE:
+                hist_feat = get_historical_features(selected_asset)
+                if hist_feat.get("available", 0) >= 2:
+                    with st.expander("Historical context"):
+                        consistency = hist_feat.get("signal_consistency")
+                        persistence = hist_feat.get("trend_persistence", 0)
+                        t_vs_y      = hist_feat.get("today_vs_yesterday", {})
+
+                        hf_parts = []
+                        if consistency is not None:
+                            hf_parts.append(
+                                f"Signal consistency over last {hist_feat['available']} snapshots: "
+                                f"**{consistency * 100:.0f}%** pointing same direction as today."
+                            )
+                        if persistence > 0:
+                            hf_parts.append(
+                                f"Trend **{snap.get('trend', 'unknown')}** has persisted "
+                                f"for **{persistence}** consecutive snapshot(s)."
+                            )
+                        if t_vs_y.get("signal_score"):
+                            d = t_vs_y["signal_score"]
+                            direction = "higher" if d["change"] > 0 else "lower" if d["change"] < 0 else "unchanged"
+                            hf_parts.append(
+                                f"Signal score today ({d['today']:+.2f}) is **{direction}** "
+                                f"than yesterday ({d['yesterday']:+.2f}, change: {d['change']:+.2f})."
+                            )
+
+                        for part in hf_parts:
+                            st.markdown(part)
+
+                        st.caption(
+                            f"Based on {hist_feat['available']} stored snapshot(s). "
+                            "Snapshots accumulate as the app runs over multiple days."
+                        )
+
+            # Full analysis
+            with st.expander("Full Analysis", expanded=is_significant):
+                st.markdown(live_explanation["detail"])
 
 
 #  SECTION 13 — Market heatmap
@@ -1209,40 +1204,22 @@ with st.expander("Category Overview", expanded=False):
     _cat_summary = _summary_results.get(selected_category, {})
     rows = []
 
-    for name, tkr in TRACKED_ASSETS[selected_category].items():
-        snap = _cat_summary.get(name, {})
-
-        if snap.get("price") is not None:
-            # Fast path: use pre-computed scan summary — no network call
+    missing_names: list[str] = []
+    for name in TRACKED_ASSETS[selected_category]:
+        asset_snap = _cat_summary.get(name, {})
+        if asset_snap.get("price") is not None:
             rows.append({
                 "Asset":   name,
-                "Signal":  snap.get("signal_label", "—"),
-                "Price":   snap.get("price", 0),
-                "24h %":   snap.get("change_1d", 0) or 0,
-                "7d %":    snap.get("change_7d", 0) or 0,
-                "Trend":   snap.get("trend", "?"),
-                "RSI":     snap.get("rsi", 50.0),
-                "10d ROC": snap.get("roc_10d", 0.0),
-                "News":    len(correlate_news(name, articles)),
+                "Signal":  asset_snap.get("signal_label", "—"),
+                "Price":   asset_snap.get("price", 0),
+                "24h %":   asset_snap.get("change_1d", 0) or 0,
+                "7d %":    asset_snap.get("change_7d", 0) or 0,
+                "Trend":   asset_snap.get("trend", "?"),
+                "RSI":     float(asset_snap.get("rsi") or 50.0),
+                "10d ROC": float(asset_snap.get("roc_10d") or 0.0),
             })
         else:
-            # Slow path: live fetch for assets missing from summary
-            hist = cached_history(tkr)
-            if hist.empty:
-                continue
-            m   = compute_price_metrics(hist)
-            mom = compute_momentum_metrics(hist)
-            rows.append({
-                "Asset":   name,
-                "Signal":  "—",
-                "Price":   m.get("latest_price", 0),
-                "24h %":   m.get("change_1d", 0) or 0,
-                "7d %":    m.get("change_7d", 0) or 0,
-                "Trend":   m.get("trend", "?"),
-                "RSI":     mom.get("rsi", 50.0),
-                "10d ROC": mom.get("roc_10d", 0.0),
-                "News":    len(correlate_news(name, articles)),
-            })
+            missing_names.append(name)
 
     if rows:
         df = pd.DataFrame(rows)
@@ -1276,21 +1253,13 @@ with st.expander("Category Overview", expanded=False):
             .map(_color_rsi, subset=["RSI"])
         )
         st.dataframe(styled, width="stretch", hide_index=True)
-        if _summary_date:
-            st.caption(f"Data from scan: {_summary_date}. Open with live data via 'Refresh all data'.")
-        else:
-            st.caption("No scan summary found. Run a full scan for faster loads.")
+        if missing_names:
+            st.caption(f"No snapshot data for: {', '.join(missing_names)}. Run a full scan to populate.")
+        elif _summary_date:
+            st.caption(f"Data from scan: {_summary_date}.")
     else:
-        st.info("No data available for this category. Run a full scan first.")
+        st.info("No scan data for this category. Run a full scan first.")
 
-
-# Auto-refresh
-
-@st.fragment(run_every=PRICE_CACHE_TTL)
-def _auto_refresher() -> None:
-    st.rerun(scope="app")
-
-_auto_refresher()
 
 # Footer
 
