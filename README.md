@@ -324,6 +324,7 @@ market-intelligence-platform/
   storage.py          Compressed snapshot persistence and retention
   backtest.py         Historical signal accuracy evaluation
   requirements.txt    Python dependencies
+  requirements-dev.txt  Test dependencies (pytest, pytest-mock)
   README.md           This file
   CONTRIBUTING.md     Contribution guidelines
   DISCLAIMER.md       Legal and financial disclaimer
@@ -332,6 +333,11 @@ market-intelligence-platform/
   Docs/
     code_flow.md      Detailed execution flow diagrams
     variable_list.md  Complete variable and constant reference
+  tests/
+    conftest.py       Import facade and shared fixtures
+    test_core.py      Sanity and invariant tests for pure functions
+    test_pipeline.py  Smoke tests for end-to-end pipelines
+    MAINTENANCE.md    Guide for updating the test suite
   market_data/        Runtime snapshot directory (git-ignored)
 ```
 
