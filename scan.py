@@ -131,13 +131,83 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
                 errors.append({"asset": asset_name, "category": category, "error": str(exc)})
                 results.setdefault(category, {})[asset_name] = {}
 
+    # Precompute global views so dashboard reads are O(1) per user.
+    # All loops run once per scan, not once per request.
+
+    # Top movers
+    _all_movers: list[dict] = [
+        {"name": _name, "chg": _data["change_1d"]}
+        for cat_assets in results.values()
+        for _name, _data in cat_assets.items()
+        if _data.get("change_1d") is not None
+    ]
+    _all_movers.sort(key=lambda x: x["chg"], reverse=True)
+    top_movers = {
+        "gainers": _all_movers[:5],
+        "losers":  _all_movers[-5:][::-1] if len(_all_movers) >= 5 else list(reversed(_all_movers)),
+    }
+
+    # Heatmap matrix
+    _cats       = list(TRACKED_ASSETS.keys())
+    _max_assets = max((len(TRACKED_ASSETS[c]) for c in _cats), default=1)
+    _hm_z:    list = []
+    _hm_text: list = []
+    for _cat in _cats:
+        _row_z:    list = []
+        _row_text: list = []
+        for _name in TRACKED_ASSETS.get(_cat, {}):
+            _chg = results.get(_cat, {}).get(_name, {}).get("change_1d")
+            if _chg is not None:
+                _row_z.append(round(_chg, 2))
+                _row_text.append(f"{_name}<br>{_chg:+.1f}%")
+            else:
+                _row_z.append(0)
+                _row_text.append(_name)
+        while len(_row_z) < _max_assets:
+            _row_z.append(None)
+            _row_text.append("")
+        _hm_z.append(_row_z)
+        _hm_text.append(_row_text)
+
+    heatmap = {
+        "z":          _hm_z,
+        "text":       _hm_text,
+        "categories": _cats,
+        "max_assets": _max_assets,
+    }
+
+    # Category overview rows — one list per category, ready for pd.DataFrame
+    category_rows: dict = {}
+    for _cat in _cats:
+        _rows:    list = []
+        _missing: list = []
+        for _name in TRACKED_ASSETS.get(_cat, {}):
+            _snap = results.get(_cat, {}).get(_name, {})
+            if _snap.get("price") is not None:
+                _rows.append({
+                    "Asset":   _name,
+                    "Signal":  _snap.get("signal_label", "—"),
+                    "Price":   _snap.get("price", 0),
+                    "24h %":   _snap.get("change_1d", 0) or 0,
+                    "7d %":    _snap.get("change_7d", 0) or 0,
+                    "Trend":   _snap.get("trend", "?"),
+                    "RSI":     float(_snap.get("rsi") or 50.0),
+                    "10d ROC": float(_snap.get("roc_10d") or 0.0),
+                })
+            else:
+                _missing.append(_name)
+        category_rows[_cat] = {"rows": _rows, "missing": _missing}
+
     scan_result = {
-        "scan_date": dt.date.today().isoformat(),
-        "scan_time": started,
-        "total":     total,
-        "succeeded": total - len(errors),
-        "errors":    errors,
-        "results":   results,
+        "scan_date":     dt.date.today().isoformat(),
+        "scan_time":     started,
+        "total":         total,
+        "succeeded":     total - len(errors),
+        "errors":        errors,
+        "results":       results,
+        "top_movers":    top_movers,
+        "heatmap":       heatmap,
+        "category_rows": category_rows,
     }
 
     if not dry_run:
