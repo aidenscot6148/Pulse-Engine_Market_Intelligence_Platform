@@ -20,6 +20,7 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as st_components
 
 from config import (
     TRACKED_ASSETS,
@@ -40,7 +41,6 @@ from app import (
     VADER_AVAILABLE,
     fetch_news_articles,
     fetch_price_history,
-    fetch_all_metrics_parallel,
     compute_price_metrics,
     compute_momentum_metrics,
     correlate_news,
@@ -65,6 +65,11 @@ try:
 except ImportError:
     STORAGE_AVAILABLE = False
     def get_historical_features(*_a, **_kw): return {}  # noqa: E731
+
+try:
+    from scan import load_last_scan_summary
+except ImportError:
+    def load_last_scan_summary() -> dict: return {}  # noqa: E731
 
 # Page configuration
 st.set_page_config(
@@ -286,10 +291,22 @@ def cached_history(symbol: str) -> pd.DataFrame:
     return result if result is not None else pd.DataFrame()
 
 
-@st.cache_data(ttl=PRICE_CACHE_TTL, show_spinner="Loading market overview ...")
-def cached_all_metrics() -> dict:
-    return fetch_all_metrics_parallel()
+@st.cache_data(ttl=3600)
+def cached_scan_summary() -> dict:
+    """Load the latest scan summary from disk — no network calls."""
+    return load_last_scan_summary()
 
+
+def is_data_stale(summary: dict, ttl_hours: float = 1.0) -> bool:
+    """Return True if the scan summary is older than ttl_hours, or missing entirely."""
+    scan_time = summary.get("scan_time")
+    if not scan_time:
+        return True
+    try:
+        last = dt.datetime.fromisoformat(scan_time)
+        return dt.datetime.now() - last > dt.timedelta(hours=ttl_hours)
+    except (ValueError, TypeError):
+        return True
 
 
 #  BACKGROUND FULL-MARKET SCAN
@@ -383,6 +400,7 @@ def _maybe_trigger_scan() -> None:
 
     state["last_started"] = now
     state["running"]      = True   # set before start so UI reflects it on the very next rerun
+    st.session_state["_scan_rerun_done"] = False  # allow one rerun after this scan finishes
     t = threading.Thread(
         target=_run_background_scan,
         daemon=True,
@@ -394,8 +412,17 @@ def _maybe_trigger_scan() -> None:
 # Trigger check runs on every rerun — the guards inside make it cheap.
 _maybe_trigger_scan()
 
-if _get_scan_state()["running"]:
-    st.info("System initializing — full market scan running in background...")
+# Auto-rerun once after a background scan completes so the UI shows fresh data.
+# The flag ensures this fires exactly once per completed scan — no infinite loops.
+_scan_state = _get_scan_state()
+if (
+    not _scan_state["running"]
+    and _scan_state.get("last_finished", 0) > 0
+    and not st.session_state.get("_scan_rerun_done", False)
+):
+    st.session_state["_scan_rerun_done"] = True
+    cached_scan_summary.clear()  # drop stale disk cache so rerun loads fresh summary
+    st.rerun()
 
 
 # Sidebar
@@ -432,8 +459,10 @@ st.sidebar.caption(f"News refresh: every {NEWS_CACHE_TTL}s")
 st.sidebar.caption(f"Sentiment engine: {'VADER' if VADER_AVAILABLE else 'Keyword fallback'}")
 st.sidebar.caption(f"Last refresh: {dt.datetime.now().strftime('%H:%M:%S')}")
 
-if st.sidebar.button("Refresh all data"):
+if st.sidebar.button("Refresh Data"):
+    cached_scan_summary.clear()
     st.cache_data.clear()
+    st.session_state.pop("_stale_refresh_triggered", None)
     st.rerun()
 
 # Full-scan status + manual trigger
@@ -481,46 +510,56 @@ if st.sidebar.button(
         ).start()
     st.rerun()
 
+# Load scan summary once — used for Top Movers, Heatmap, and Category Overview.
+# Disk read only, no network calls.
+_summary         = cached_scan_summary()
+_summary_results = _summary.get("results", {})
+_summary_date    = _summary.get("scan_date", "")
+
 # Top movers (sidebar)
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Top Movers — 24h**")  # winners and losers. wall street in 10 rows
 
 with st.sidebar:
-    all_m   = cached_all_metrics()
     movers: list[dict] = []
-    for cat, cat_assets in all_m.items():
+    for cat, cat_assets in _summary_results.items():
         for name, data in cat_assets.items():
-            chg = data.get("metrics", {}).get("change_1d")
+            chg = data.get("change_1d")
             if chg is not None:
                 movers.append({"name": name, "cat": cat, "chg": chg})
 
-    movers_sorted = sorted(movers, key=lambda x: x["chg"], reverse=True)
-    gainers = movers_sorted[:5]
-    losers  = movers_sorted[-5:][::-1]
+    if not movers:
+        st.caption("No scan data yet — run a full scan to see top movers.")
+    else:
+        movers_sorted = sorted(movers, key=lambda x: x["chg"], reverse=True)
+        gainers = movers_sorted[:5]
+        losers  = movers_sorted[-5:][::-1]
 
-    def _mover_html(items: list[dict], color: str) -> str:
-        return "".join(
-            f'<div class="mover-row">'
-            f'<span style="color:#c8d6e5">{mover["name"]}</span>'
-            f'<span style="color:{color};font-weight:600">{mover["chg"]:+.2f}%</span>'
-            f'</div>'
-            for mover in items
-        )
+        def _mover_html(items: list[dict], color: str) -> str:
+            return "".join(
+                f'<div class="mover-row">'
+                f'<span style="color:#c8d6e5">{mover["name"]}</span>'
+                f'<span style="color:{color};font-weight:600">{mover["chg"]:+.2f}%</span>'
+                f'</div>'
+                for mover in items
+            )
 
-    if gainers:
-        st.markdown(
-            '<div style="margin-bottom:6px;font-size:0.75rem;color:#4fc3f7;'
-            'font-weight:700;letter-spacing:0.5px">GAINERS</div>'
-            + _mover_html(gainers, "#00e676"),
-            unsafe_allow_html=True,
-        )
-    if losers:
-        st.markdown(
-            '<div style="margin-top:10px;margin-bottom:6px;font-size:0.75rem;'
-            'color:#ff5252;font-weight:700;letter-spacing:0.5px">LOSERS</div>'
-            + _mover_html(losers, "#ff5252"),
-            unsafe_allow_html=True,
-        )
+        if gainers:
+            st.markdown(
+                '<div style="margin-bottom:6px;font-size:0.75rem;color:#4fc3f7;'
+                'font-weight:700;letter-spacing:0.5px">GAINERS</div>'
+                + _mover_html(gainers, "#00e676"),
+                unsafe_allow_html=True,
+            )
+        if losers:
+            st.markdown(
+                '<div style="margin-top:10px;margin-bottom:6px;font-size:0.75rem;'
+                'color:#ff5252;font-weight:700;letter-spacing:0.5px">LOSERS</div>'
+                + _mover_html(losers, "#ff5252"),
+                unsafe_allow_html=True,
+            )
+        if _summary_date:
+            st.caption(f"From scan: {_summary_date}")
 
 st.sidebar.markdown("---")
 st.sidebar.markdown(
@@ -534,8 +573,34 @@ st.sidebar.markdown(
 
 #  MAIN PANEL - fetch data
 
+# Stale data detection — runs once per session to avoid infinite rerun loops.
+# If data is stale, the background scan is already triggered by _maybe_trigger_scan()
+# above. We just need to clear the disk cache once so the next rerun picks up fresh data.
+_stale = is_data_stale(_summary)
+if _stale and not st.session_state.get("_stale_refresh_triggered", False):
+    st.session_state["_stale_refresh_triggered"] = True
+    cached_scan_summary.clear()  # invalidate disk cache so next rerun loads fresh summary
+
 st.markdown(f"# {selected_asset}")
 st.caption(f"{selected_category}  ·  `{ticker}`  ·  last 30 days")
+
+# Stale / scan-running banners — shown once, do not block rendering
+if _get_scan_state()["running"]:
+    st.info("Updating market data in background — snapshot data shown below.", icon="🔄")
+elif _stale:
+    st.warning(
+        "Market data may be outdated. A background refresh has been triggered. "
+        "Use **Refresh Data** in the sidebar to reload immediately.",
+        icon="⚠️",
+    )
+
+_scan_time = _summary.get("scan_time", "")
+if _scan_time:
+    try:
+        _last_dt = dt.datetime.fromisoformat(_scan_time)
+        st.caption(f"Market data last updated: {_last_dt.strftime('%Y-%m-%d %H:%M')}")
+    except (ValueError, TypeError):
+        pass
 
 history  = cached_history(ticker)
 articles = cached_news()
@@ -1087,8 +1152,7 @@ for cat in cats_for_heatmap:
     row_z:    list = []
     row_text: list = []
     for name in cat_asset_names:
-        m   = all_m.get(cat, {}).get(name, {}).get("metrics", {})
-        chg = m.get("change_1d")
+        chg = _summary_results.get(cat, {}).get(name, {}).get("change_1d")
         if chg is not None:
             row_z.append(round(chg, 2))
             row_text.append(f"{name}<br>{chg:+.1f}%")
@@ -1132,69 +1196,92 @@ hm_fig.update_layout(
     font=dict(size=10, color="#c8d6e5"),
 )
 st.plotly_chart(hm_fig, width="stretch")
-st.caption("Clipped at +/- 5%. Cells with no data show 0%.")
+_hm_caption = "Clipped at +/- 5%. Cells with no data show 0%."
+if _summary_date:
+    _hm_caption += f"  ·  Data from scan: {_summary_date}"
+st.caption(_hm_caption)
 
 
 #  SECTION 14 — Category overview table
 
 st.markdown("---")
-st.markdown("## Category Overview")
+with st.expander("Category Overview", expanded=False):
+    _cat_summary = _summary_results.get(selected_category, {})
+    rows = []
 
-rows = []
-for name, tkr in TRACKED_ASSETS[selected_category].items():
-    hist = cached_history(tkr)
-    if hist.empty:
-        continue
-    m   = compute_price_metrics(hist)
-    mom = compute_momentum_metrics(hist)
-    n_news = len(correlate_news(name, articles))
-    rows.append({
-        "Asset":        name,
-        "Price":        m.get("latest_price", 0),
-        "24h %":        m.get("change_1d", 0) or 0,
-        "7d %":         m.get("change_7d", 0) or 0,
-        "Volatility %": m.get("volatility", 0),
-        "Trend":        m.get("trend", "?"),
-        "RSI":          mom.get("rsi", 50.0),
-        "10d ROC":      mom.get("roc_10d", 0.0),
-        "News":         n_news,
-    })
+    for name, tkr in TRACKED_ASSETS[selected_category].items():
+        snap = _cat_summary.get(name, {})
 
-if rows:
-    df = pd.DataFrame(rows)
+        if snap.get("price") is not None:
+            # Fast path: use pre-computed scan summary — no network call
+            rows.append({
+                "Asset":   name,
+                "Signal":  snap.get("signal_label", "—"),
+                "Price":   snap.get("price", 0),
+                "24h %":   snap.get("change_1d", 0) or 0,
+                "7d %":    snap.get("change_7d", 0) or 0,
+                "Trend":   snap.get("trend", "?"),
+                "RSI":     snap.get("rsi", 50.0),
+                "10d ROC": snap.get("roc_10d", 0.0),
+                "News":    len(correlate_news(name, articles)),
+            })
+        else:
+            # Slow path: live fetch for assets missing from summary
+            hist = cached_history(tkr)
+            if hist.empty:
+                continue
+            m   = compute_price_metrics(hist)
+            mom = compute_momentum_metrics(hist)
+            rows.append({
+                "Asset":   name,
+                "Signal":  "—",
+                "Price":   m.get("latest_price", 0),
+                "24h %":   m.get("change_1d", 0) or 0,
+                "7d %":    m.get("change_7d", 0) or 0,
+                "Trend":   m.get("trend", "?"),
+                "RSI":     mom.get("rsi", 50.0),
+                "10d ROC": mom.get("roc_10d", 0.0),
+                "News":    len(correlate_news(name, articles)),
+            })
 
-    def _color_pct(val):
-        if isinstance(val, (int, float)):
-            if val > 0:
-                return "color: #00e676"
-            if val < 0:
-                return "color: #ff5252"
-        return ""
+    if rows:
+        df = pd.DataFrame(rows)
 
-    def _color_rsi(val):
-        if isinstance(val, (int, float)):
-            if val > 70:
-                return "color: #ff5252"
-            if val < 30:
-                return "color: #00e676"
-        return ""
+        def _color_pct(val):
+            if isinstance(val, (int, float)):
+                if val > 0:
+                    return "color: #00e676"
+                if val < 0:
+                    return "color: #ff5252"
+            return ""
 
-    styled = (
-        df.style
-        .format({
-            "Price":        "${:,.2f}",
-            "24h %":        "{:+.2f}%",
-            "7d %":         "{:+.2f}%",
-            "Volatility %": "{:.2f}%",
-            "RSI":          "{:.1f}",
-            "10d ROC":      "{:+.2f}%",
-        })
-        .map(_color_pct, subset=["24h %", "7d %", "10d ROC"])
-        .map(_color_rsi, subset=["RSI"])
-    )
-    st.dataframe(styled, width="stretch", hide_index=True)
-else:
-    st.info("No data available for this category.")
+        def _color_rsi(val):
+            if isinstance(val, (int, float)):
+                if val > 70:
+                    return "color: #ff5252"
+                if val < 30:
+                    return "color: #00e676"
+            return ""
+
+        styled = (
+            df.style
+            .format({
+                "Price":   "${:,.2f}",
+                "24h %":   "{:+.2f}%",
+                "7d %":    "{:+.2f}%",
+                "RSI":     "{:.1f}",
+                "10d ROC": "{:+.2f}%",
+            })
+            .map(_color_pct, subset=["24h %", "7d %", "10d ROC"])
+            .map(_color_rsi, subset=["RSI"])
+        )
+        st.dataframe(styled, width="stretch", hide_index=True)
+        if _summary_date:
+            st.caption(f"Data from scan: {_summary_date}. Open with live data via 'Refresh all data'.")
+        else:
+            st.caption("No scan summary found. Run a full scan for faster loads.")
+    else:
+        st.info("No data available for this category. Run a full scan first.")
 
 
 # Auto-refresh
@@ -1238,8 +1325,8 @@ if st.button("·", key="_egg_btn", help="", type="tertiary"):
 
 if st.session_state["_egg_count"] >= _EGG_LIMIT:
     st.session_state["_egg_count"] = 0              # reset so it doesn't loop
-    st.markdown(
-        f'<a href="{_EGG_URL}" target="_blank" style="color:#0e1117;font-size:1px">·</a>',
-        unsafe_allow_html=True,
-    )
     st.toast("never gonna give you up 🎷", icon="🎷")
+    st_components.html(
+        f'<script>window.open("{_EGG_URL}", "_blank");</script>',
+        height=0,
+    )
