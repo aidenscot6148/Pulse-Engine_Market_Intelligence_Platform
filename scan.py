@@ -194,7 +194,7 @@ if __name__ == "__main__":
     )
 
     parser = argparse.ArgumentParser(
-        description="Market Intelligence Platform — Full Market Scan"
+        description="PulseEngine — Full Market Scan"
     )
     parser.add_argument(
         "--quiet",   action="store_true",
