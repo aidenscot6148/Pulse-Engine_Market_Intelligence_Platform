@@ -342,6 +342,8 @@ market-intelligence-platform/
     test_pipeline.py  Smoke tests for end-to-end pipelines
     MAINTENANCE.md    Guide for updating the test suite
   market_data/        Runtime snapshot directory (git-ignored)
+  pulseengine_logo.png
+  Favicon.ico
 ```
 
 ---
