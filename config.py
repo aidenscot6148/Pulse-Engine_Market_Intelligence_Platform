@@ -5,6 +5,11 @@ Every tunable value lives here. app.py and dashboard.py import from this
 file only — no magic numbers or hardcoded strings elsewhere.
 """
 
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+DASHBOARD_ICON = str(BASE_DIR / "favicon.ico")
+
 #  1. TRACKED ASSETS  (Yahoo Finance tickers)
 
 # 24 assets walk into a bar. the bartender says "what's your signal score?"
@@ -285,7 +290,7 @@ RELEVANCE_MEDIUM = 3
 #  7. DASHBOARD SETTINGS
 
 DASHBOARD_TITLE = "PulseEngine"
-DASHBOARD_ICON = "📊"
+
 DASHBOARD_LAYOUT = "wide"
 AUTO_REFRESH_SECONDS = 90   # refreshes every 90 seconds. like anxiety but automated and on a schedule
 CHART_HEIGHT = 420
