@@ -21,7 +21,6 @@ from pathlib import Path
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-import streamlit.components.v1 as st_components
 
 from config import (
     TRACKED_ASSETS,
@@ -1583,23 +1582,23 @@ _EGG_LIMIT  = 5
 _EGG_WINDOW = 2.0
 _EGG_URL    = "https://www.youtube.com/watch?v=QDia3e12czc"
 
-if "_egg_count" not in st.session_state:
-    st.session_state["_egg_count"] = 0
-if "_egg_ts" not in st.session_state:
-    st.session_state["_egg_ts"] = 0.0
+if "_egg_clicks" not in st.session_state:
+    st.session_state["_egg_clicks"] = []
 
-if st.button("·", key="_egg_btn", help="", type="tertiary"):
-    _now = time.time()
-    if _now - st.session_state["_egg_ts"] > _EGG_WINDOW:
-        st.session_state["_egg_count"] = 1
-    else:
-        st.session_state["_egg_count"] += 1
-    st.session_state["_egg_ts"] = _now
+clicked = st.button("·", key="_egg_btn", help="", type="tertiary")
 
-if st.session_state["_egg_count"] >= _EGG_LIMIT:
-    st.session_state["_egg_count"] = 0
-    st.toast("never gonna give you up 🎷", icon="🎷")
-    st_components.html(
-        f'<script>window.open("{_EGG_URL}", "_blank");</script>',
-        height=0,
-    )
+_now = time.time()
+
+if clicked:
+    st.session_state["_egg_clicks"].append(_now)
+
+st.session_state["_egg_clicks"] = [
+    t for t in st.session_state["_egg_clicks"]
+    if _now - t <= _EGG_WINDOW
+]
+
+if len(st.session_state["_egg_clicks"]) >= _EGG_LIMIT:
+    st.session_state["_egg_clicks"] = []
+
+    # Direct user-safe open (no popup blocker issues)
+    st.link_button("Easter Egg Unlocked!", _EGG_URL)
