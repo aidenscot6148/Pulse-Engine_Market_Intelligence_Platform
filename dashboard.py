@@ -12,6 +12,7 @@ Decision flow (top to bottom):
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import threading
 import time
@@ -78,203 +79,571 @@ st.set_page_config(
     layout=DASHBOARD_LAYOUT,  # type: ignore[arg-type]
 )
 
-# Theme / CSS
-# yeah... i am chatpgting this part.
+# ── Theme / CSS — Retro Financial Broadsheet ──────────────────────────────────
 st.markdown("""
 <style>
-  :root {
-    --bg-card: #0e1117;
-    --border:  #1e2a3a;
-    --accent:  #4fc3f7;
-    --green:   #00e676;
-    --red:     #ff5252;
-    --orange:  #ffab40;
-    --muted:   #8892a0;
-  }
 
-  div[data-testid="stMetric"] {
-    background: linear-gradient(145deg, #0f1923 0%, #152238 100%);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 20px;
-  }
-  div[data-testid="stMetric"] label { color: var(--muted) !important; }
-  div[data-testid="stMetric"] [data-testid="stMetricValue"] { color: #e8ecf1 !important; }
+/* ── Google Fonts ─────────────────────────────────────────────────────────── */
+/* Lora: screen-optimised serif, heavier strokes — readable on dark bg        */
+/* Playfair Display: display headings only                                     */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
 
-  section[data-testid="stSidebar"] { background: #080c14; }
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --bg-main:      #0d0c0a;
+  --bg-card:      #141210;
+  --bg-card-alt:  #111009;
+  --bg-sidebar:   #0a0908;
+  --bg-input:     #1c1a16;
 
-  .signal-card {
-    padding: 20px 28px;
-    border-radius: 12px;
-    margin-bottom: 4px;
-  }
-  .signal-label-text {
-    font-size: 1.6rem;
-    font-weight: 800;
-    letter-spacing: 0.5px;
-  }
-  .signal-score-text {
-    font-size: 1.1rem;
-    font-weight: 500;
-    opacity: 0.8;
-    margin-top: 2px;
-  }
-  .signal-strong-bull { background:#00320070; border:1px solid #00e67660; color:var(--green); }
-  .signal-bull        { background:#00280050; border:1px solid #00c85350; color:#69f0ae; }
-  .signal-slight-bull { background:#00200040; border:1px solid #00a84040; color:#a5d6a7; }
-  .signal-neutral     { background:#1a274450; border:1px solid #4fc3f750; color:var(--accent); }
-  .signal-slight-bear { background:#30100030; border:1px solid #ff8a6540; color:#ffab91; }
-  .signal-bear        { background:#40080040; border:1px solid #ff525250; color:#ef9a9a; }
-  .signal-strong-bear { background:#4a000060; border:1px solid #ff525270; color:var(--red); }
+  --border:       #2c2820;
+  --border-mid:   #3d3630;
+  --border-rule:  #524840;
 
-  .confidence-badge {
-    display: inline-block;
-    padding: 3px 11px;
-    border-radius: 12px;
-    font-size: 0.78rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-left: 10px;
-    vertical-align: middle;
-  }
-  .conf-high   { background:#004d2640; color:var(--green);  border:1px solid #00e67640; }
-  .conf-medium { background:#4a350040; color:var(--orange); border:1px solid #ffab4040; }
-  .conf-low    { background:#4a000040; color:var(--red);    border:1px solid #ff525240; }
+  --gold:         #d4b06a;      /* slightly brighter for dark bg contrast     */
+  --gold-dim:     #9a8050;
+  --gold-faint:   #3a3020;
 
-  .why-box {
-    background: #0a1628;
-    border: 1px solid #253a5e;
-    border-radius: 8px;
-    padding: 14px 20px;
-    margin: 10px 0 12px 0;
-    font-size: 0.95rem;
-    color: #b8c8d8;
-    line-height: 1.65;
-  }
-  .why-label {
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 6px;
-  }
+  /* Text — higher contrast than before for readability */
+  --text-primary:   #f0e6cc;   /* warm ivory, clearly legible                 */
+  --text-secondary: #c0aa88;   /* medium warm — body copy                     */
+  --text-muted:     #7a6e58;   /* captions / ghost text                       */
 
-  .driver-box {
-    background: #0d1f10;
-    border-left: 3px solid var(--green);
-    border-radius: 0 8px 8px 0;
-    padding: 10px 16px;
-    margin: 0 0 10px 0;
-    font-size: 0.9rem;
-    color: #b8d8b8;
-  }
-  .driver-label {
-    font-size: 0.70rem;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: #69f0ae;
-    margin-bottom: 4px;
-  }
+  --green:      #4a7a52;
+  --green-text: #8acc96;       /* bumped up for contrast                      */
+  --green-bg:   #0b1c0e;
 
-  .contra-box {
-    background: #1a1000;
-    border: 1px solid #ff8a6540;
-    border-radius: 8px;
-    padding: 10px 16px;
-    margin: 6px 0;
-    font-size: 0.87rem;
-    color: #ffccbc;
-    line-height: 1.5;
-  }
+  --red:      #7a3a3a;
+  --red-text: #d09090;         /* bumped up for contrast                      */
+  --red-bg:   #180c0c;
 
-  .cluster-card {
-    background: #0c1a2e;
-    border: 1px solid #1a3050;
-    border-radius: 10px;
-    padding: 14px 18px;
-    margin-bottom: 14px;
-  }
-  .cluster-header-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1e3050;
-  }
-  .cluster-title {
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: var(--orange);
-  }
-  .cluster-meta {
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
+  --amber:      #a07840;
+  --amber-text: #e0b878;       /* bumped up for contrast                      */
+  --amber-bg:   #1a1308;
 
-  .news-row {
-    background: #0f1923;
-    border: 1px solid #1c2d42;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    transition: border-color 0.2s;
-  }
-  .news-row:hover { border-color: var(--accent); }
-  .news-meta { color: var(--muted); font-size: 0.81rem; }
-  .rel-high  { color: var(--accent); font-weight: 700; }
-  .rel-med   { color: var(--orange); font-weight: 600; }
-  .rel-low   { color: var(--muted);  font-weight: 400; }
+  --font-body:    'Lora','Georgia','Times New Roman',serif;
+  --font-display: 'Playfair Display','Georgia','Times New Roman',serif;
+}
 
-  .factor-pill {
-    display: inline-block;
-    background: #1a2744;
-    border: 1px solid #2a3f66;
-    border-radius: 20px;
-    padding: 4px 12px;
-    margin: 3px 4px;
-    font-size: 0.83rem;
-    color: #c8d6e5;
-  }
-  .factor-pill-warn {
-    border-color: #ff525260;
-    color: #ef9a9a;
-  }
+/* ── Global reset ─────────────────────────────────────────────────────────── */
+html, body, [class*="css"], .stApp, .main {
+  background-color: var(--bg-main) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 16px;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+}
 
-  .hist-box {
-    background: #0d1825;
-    border: 1px solid #1a2e45;
-    border-radius: 8px;
-    padding: 10px 16px;
-    font-size: 0.85rem;
-    color: #8892a0;
-  }
-  .hist-label {
-    font-size: 0.70rem;
-    font-weight: 700;
-    letter-spacing: 0.7px;
-    text-transform: uppercase;
-    color: #4fc3f7;
-    margin-bottom: 4px;
-  }
+/* ── Headings ─────────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6,
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+  font-family: var(--font-display) !important;
+  color: var(--text-primary) !important;
+  font-weight: 700;
+}
+.stMarkdown h1 {
+  font-size: 2.2rem !important;
+  font-weight: 700 !important;
+  color: var(--gold) !important;
+  border-bottom: 1px solid var(--border-rule);
+  padding-bottom: 10px;
+  margin-bottom: 2px !important;
+}
+.stMarkdown h2 {
+  font-size: 1.2rem !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-top: 8px !important;
+}
+.stMarkdown h3 {
+  font-size: 1.0rem !important;
+  font-weight: 600 !important;
+  color: var(--gold-dim) !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 
-  .mover-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    border-bottom: 1px solid #12202e;
-    font-size: 0.84rem;
-  }
+/* ── Caption ──────────────────────────────────────────────────────────────── */
+.stCaption, [data-testid="stCaptionContainer"] p {
+  color: var(--text-muted) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.82rem !important;
+  font-style: italic;
+}
 
-  .bt-hit  { color: var(--green); }
-  .bt-miss { color: var(--red); }
+/* ── HR ───────────────────────────────────────────────────────────────────── */
+hr {
+  border: none !important;
+  border-top: 1px solid var(--border-rule) !important;
+  margin: 20px 0 !important;
+  opacity: 0.6;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+section[data-testid="stSidebar"],
+section[data-testid="stSidebar"] > div {
+  background-color: var(--bg-sidebar) !important;
+  border-right: 1px solid var(--border-mid) !important;
+}
+section[data-testid="stSidebar"] .stMarkdown p,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] .stCaption {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.88rem !important;
+}
+section[data-testid="stSidebar"] strong {
+  color: var(--gold-dim) !important;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  font-size: 0.80rem;
+  text-transform: uppercase;
+}
+
+/* ── Metric cards ─────────────────────────────────────────────────────────── */
+div[data-testid="stMetric"] {
+  background: linear-gradient(160deg, #181510 0%, #111009 100%) !important;
+  border: 1px solid var(--border-mid) !important;
+  border-top: 2px solid var(--gold-faint) !important;
+  border-radius: 4px !important;
+  padding: 18px 22px 14px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4) !important;
+  position: relative;
+}
+div[data-testid="stMetric"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 16px; right: 16px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  opacity: 0.35;
+}
+div[data-testid="stMetric"] label {
+  color: var(--text-muted) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.74rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+}
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+  color: var(--text-primary) !important;
+  font-family: var(--font-display) !important;
+  font-size: 1.6rem !important;
+  font-weight: 700 !important;
+}
+div[data-testid="stMetric"] [data-testid="stMetricDelta"] svg { display: none; }
+div[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+  font-family: var(--font-body) !important;
+  font-size: 0.83rem !important;
+  font-weight: 500 !important;
+}
+
+/* ── Signal card ─────────────────────────────────────────────────────────── */
+.signal-card {
+  padding: 22px 28px 18px;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  border-left: 3px solid;
+  box-shadow: 0 2px 14px rgba(0,0,0,0.45);
+}
+.signal-label-text {
+  font-family: var(--font-display) !important;
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+.signal-score-text {
+  font-family: var(--font-body);
+  font-size: 0.90rem;
+  font-weight: 400;
+  font-style: italic;
+  opacity: 0.75;
+  margin-top: 5px;
+}
+.signal-strong-bull { background: linear-gradient(135deg,#0d2010,#0a1a0c); border-color: var(--green);   color: var(--green-text); }
+.signal-bull        { background: linear-gradient(135deg,#0c1e0e,#091509); border-color: #3d6a44;        color: #7ab880; }
+.signal-slight-bull { background: linear-gradient(135deg,#0c1a0e,#0a130c); border-color: #305038;        color: #9ac4a0; }
+.signal-neutral     { background: linear-gradient(135deg,#181510,#121009); border-color: var(--gold-dim); color: var(--gold); }
+.signal-slight-bear { background: linear-gradient(135deg,#1e1208,#170d06); border-color: #806030;        color: var(--amber-text); }
+.signal-bear        { background: linear-gradient(135deg,#1e0e0e,#160909); border-color: var(--red);     color: var(--red-text); }
+.signal-strong-bear { background: linear-gradient(135deg,#220e0e,#180808); border-color: #9a4040;        color: #d09090; }
+
+/* ── Confidence badge ─────────────────────────────────────────────────────── */
+.confidence-badge {
+  display: inline-block;
+  padding: 3px 11px;
+  border-radius: 2px;
+  font-family: var(--font-body);
+  font-size: 0.70rem;
+  font-weight: 600;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-left: 14px;
+  vertical-align: middle;
+  border: 1px solid;
+}
+.conf-high   { color: var(--green-text); border-color: var(--green); background: var(--green-bg); }
+.conf-medium { color: var(--amber-text); border-color: var(--amber); background: var(--amber-bg); }
+.conf-low    { color: var(--red-text);   border-color: var(--red);   background: var(--red-bg);   }
+
+/* ── Why-it-matters box ───────────────────────────────────────────────────── */
+.why-box {
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-mid);
+  border-left: 3px solid var(--gold-dim);
+  border-radius: 0 4px 4px 0;
+  padding: 16px 22px;
+  margin: 12px 0 14px;
+  font-family: var(--font-body);
+  font-size: 1.0rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+.why-label {
+  font-family: var(--font-body);
+  font-size: 0.70rem;
+  font-weight: 600;
+  font-style: normal;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 8px;
+}
+
+/* ── Primary driver box ───────────────────────────────────────────────────── */
+.driver-box {
+  background: var(--green-bg);
+  border-left: 3px solid var(--green);
+  border-radius: 0 4px 4px 0;
+  padding: 12px 18px;
+  margin: 0 0 12px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: #a8d8a8;
+  line-height: 1.7;
+}
+.driver-label {
+  font-family: var(--font-body);
+  font-size: 0.70rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green-text);
+  margin-bottom: 5px;
+}
+
+/* ── Contradiction box ────────────────────────────────────────────────────── */
+.contra-box {
+  background: var(--red-bg);
+  border: 1px solid #3a1818;
+  border-radius: 4px;
+  padding: 10px 16px;
+  margin: 6px 0;
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  color: #c8a0a0;
+  line-height: 1.65;
+}
+
+/* ── Cluster cards ────────────────────────────────────────────────────────── */
+.cluster-card {
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 14px 20px;
+  margin-bottom: 14px;
+}
+.cluster-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.cluster-title {
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+}
+.cluster-meta {
+  font-family: var(--font-body);
+  font-size: 0.80rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* ── News rows ────────────────────────────────────────────────────────────── */
+.news-row {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px 18px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+.news-row:hover { border-color: var(--gold-dim); background: #181510; }
+.news-meta {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.80rem;
+  font-style: italic;
+}
+.rel-high { color: var(--gold);       font-weight: 600; }
+.rel-med  { color: var(--amber-text); font-weight: 500; }
+.rel-low  { color: var(--text-muted); font-weight: 400; }
+
+/* ── Factor pills ─────────────────────────────────────────────────────────── */
+.factor-pill {
+  display: inline-block;
+  background: #1c1910;
+  border: 1px solid var(--border-mid);
+  border-radius: 2px;
+  padding: 3px 10px;
+  margin: 3px 4px;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.factor-pill-warn { border-color: #5a3030; color: var(--red-text); }
+
+/* ── Historical context box ───────────────────────────────────────────────── */
+.hist-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  padding: 12px 18px;
+  font-family: var(--font-body);
+  font-size: 0.90rem;
+  color: var(--text-secondary);
+}
+.hist-label {
+  font-family: var(--font-body);
+  font-size: 0.70rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+  margin-bottom: 5px;
+}
+
+/* ── Top movers row ───────────────────────────────────────────────────────── */
+.mover-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+}
+
+/* ── Backtest ─────────────────────────────────────────────────────────────── */
+.bt-hit  { color: var(--green-text); }
+.bt-miss { color: var(--red-text);   }
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.stButton > button {
+  font-family: var(--font-body) !important;
+  font-size: 0.88rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.06em !important;
+  color: var(--gold) !important;
+  background: transparent !important;
+  border: 1px solid var(--gold-faint) !important;
+  border-radius: 3px !important;
+  padding: 7px 20px !important;
+  transition: border-color 0.2s ease, background 0.2s ease !important;
+}
+.stButton > button:hover {
+  border-color: var(--gold-dim) !important;
+  background: var(--gold-faint) !important;
+  color: var(--gold) !important;
+}
+.stButton > button:disabled { opacity: 0.35 !important; }
+
+/* ── Selectbox ────────────────────────────────────────────────────────────── */
+.stSelectbox > div > div,
+[data-baseweb="select"] > div {
+  background-color: var(--bg-input) !important;
+  border-color: var(--border-mid) !important;
+  border-radius: 3px !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+}
+[data-baseweb="select"] span {
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.95rem !important;
+}
+
+/* ── Checkbox ─────────────────────────────────────────────────────────────── */
+.stCheckbox label,
+.stCheckbox label p {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.92rem !important;
+}
+
+/* ── Expanders ────────────────────────────────────────────────────────────── */
+[data-testid="stExpander"] {
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  background: var(--bg-card) !important;
+}
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary p {
+  font-family: var(--font-body) !important;
+  font-size: 0.92rem !important;
+  color: var(--text-secondary) !important;
+  letter-spacing: 0.02em;
+}
+[data-testid="stExpander"] summary:hover,
+[data-testid="stExpander"] summary:hover p { color: var(--gold) !important; }
+
+/* ── Alerts — FULL OVERRIDE (covers all Streamlit alert variants) ─────────── */
+/* Target every possible selector Streamlit uses across versions */
+div[data-testid="stAlert"],
+div[role="alert"],
+.stAlert,
+[data-baseweb="notification"] {
+  font-family: var(--font-body) !important;
+  font-size: 0.92rem !important;
+  border-radius: 4px !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+}
+
+/* Info banner — replace teal with slate-navy */
+div[data-testid="stAlert"][kind="info"],
+div[data-testid="stAlert"].st-emotion-cache-1clstc5,
+[data-baseweb="notification"][kind="info"],
+div[role="alert"]:has(svg[data-testid="stIconMaterial-info"]) {
+  background: #0e1a2a !important;
+  border-color: #1e3a5a !important;
+  color: #a8c4dc !important;
+}
+div[data-testid="stAlert"][kind="info"] p,
+div[data-testid="stAlert"][kind="info"] svg { color: #6a9abf !important; }
+
+/* Warning banner — replace Streamlit's olive/yellow with warm amber */
+div[data-testid="stAlert"][kind="warning"],
+[data-baseweb="notification"][kind="warning"],
+div[role="alert"]:has(svg[data-testid="stIconMaterial-warning"]) {
+  background: var(--amber-bg) !important;
+  border-color: #4a3010 !important;
+  color: var(--amber-text) !important;
+}
+div[data-testid="stAlert"][kind="warning"] p,
+div[data-testid="stAlert"][kind="warning"] svg { color: var(--amber-text) !important; }
+
+/* Error banner */
+div[data-testid="stAlert"][kind="error"],
+[data-baseweb="notification"][kind="error"],
+div[role="alert"]:has(svg[data-testid="stIconMaterial-error"]) {
+  background: var(--red-bg) !important;
+  border-color: #4a1818 !important;
+  color: var(--red-text) !important;
+}
+div[data-testid="stAlert"][kind="error"] p,
+div[data-testid="stAlert"][kind="error"] svg { color: var(--red-text) !important; }
+
+/* Success banner */
+div[data-testid="stAlert"][kind="success"],
+[data-baseweb="notification"][kind="success"],
+div[role="alert"]:has(svg[data-testid="stIconMaterial-check_circle"]) {
+  background: var(--green-bg) !important;
+  border-color: #1e4428 !important;
+  color: var(--green-text) !important;
+}
+
+/* Nuclear override — catches any class-name Streamlit might generate */
+div[data-testid="stAlert"] * {
+  font-family: var(--font-body) !important;
+}
+
+/* ── Dataframe ────────────────────────────────────────────────────────────── */
+[data-testid="stDataFrame"],
+[data-testid="stDataFrame"] * {
+  font-family: var(--font-body) !important;
+  font-size: 0.90rem !important;
+}
+
+/* ── Spinner ──────────────────────────────────────────────────────────────── */
+[data-testid="stSpinner"] p {
+  color: var(--text-muted) !important;
+  font-family: var(--font-body) !important;
+  font-style: italic;
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────────── */
+[data-testid="stToast"],
+[data-testid="stToast"] * {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-mid) !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-body) !important;
+  border-radius: 4px !important;
+}
+
+/* ── Markdown body ────────────────────────────────────────────────────────── */
+.stMarkdown p, .stMarkdown li {
+  color: var(--text-secondary) !important;
+  font-family: var(--font-body) !important;
+  font-size: 0.97rem;
+  font-weight: 400;
+  line-height: 1.8;
+}
+.stMarkdown strong {
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+.stMarkdown em { color: var(--text-secondary) !important; }
+.stMarkdown a {
+  color: var(--gold-dim) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.stMarkdown a:hover { color: var(--gold) !important; }
+.stMarkdown code {
+  background: #1e1c16 !important;
+  color: var(--gold) !important;
+  border: 1px solid var(--border-mid) !important;
+  border-radius: 2px;
+  padding: 1px 6px;
+  font-size: 0.85em;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-main); }
+::-webkit-scrollbar-thumb { background: var(--border-rule); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--gold-faint); }
+
 </style>
 """, unsafe_allow_html=True)
+
+
+# ── Logo helper ───────────────────────────────────────────────────────────────
+def _sidebar_logo_html() -> str:
+    """Return an <img> tag with the logo as base64, or '' if not found."""
+    logo_path = Path(__file__).parent / "pulseengine_logo.png"
+    if logo_path.exists():
+        data = base64.b64encode(logo_path.read_bytes()).decode()
+        return (
+            f'<img src="data:image/png;base64,{data}" '
+            f'style="width:100%;max-width:190px;display:block;'
+            f'margin:0 auto 4px auto;opacity:0.93;" />'
+        )
+    return f"<span style='font-size:1.4rem'>{DASHBOARD_ICON}</span>"
 
 
 # Cached data loaders
@@ -310,31 +679,12 @@ def is_data_stale(summary: dict, ttl_hours: float = 1.0) -> bool:
 
 
 #  BACKGROUND FULL-MARKET SCAN
-#
-#  _get_scan_state() — @st.cache_resource singleton that survives Streamlit
-#    reruns within the same process.  Streamlit re-executes the entire script
-#    on every rerun, so plain module-level variables (e.g. threading.Lock())
-#    are reset to fresh values each time — making the lock ineffective and
-#    allowing multiple concurrent scan threads to collide.  Using
-#    @st.cache_resource ensures the lock and status dict are created exactly
-#    once per process and shared across all reruns and browser sessions.
-#
-#  Trigger logic (called on every rerun via _maybe_trigger_scan):
-#    1. At most one check per 60 s per browser session (st.session_state guard).
-#    2. Ground truth for "last scan time" is the mtime of _scan_summary.json.gz
-#       so the schedule survives server restarts.
-#    3. If the file is missing or older than SCAN_INTERVAL_MINUTES, a daemon
-#       thread is started; the lock prevents a second thread from starting
-#       while the first is still running.
 
 @st.cache_resource
 def _get_scan_state() -> dict:
     """
     Singleton scan state — created once per process, never reset by reruns.
-    Contains the threading.Lock and all status fields so they are co-located
-    and share the same lifecycle.
     """
-    # one lock to rule them all. one lock to find them. one lock to bring them all and in the darkness not deadlock
     return {
         "lock":          threading.Lock(),
         "running":       False,
@@ -355,12 +705,7 @@ def _scan_summary_mtime() -> float:
 
 
 def _run_background_scan() -> None:
-    """
-    Worker executed inside a daemon thread.
-    Holds the singleton scan lock for its entire duration so a second
-    invocation is rejected even across Streamlit reruns.
-    """
-    # off you go little thread. do not crash. i believe in you (nervously)
+    """Worker executed inside a daemon thread."""
     state = _get_scan_state()
     state["running"]     = True
     state["error"]       = ""
@@ -378,29 +723,23 @@ def _run_background_scan() -> None:
 
 
 def _maybe_trigger_scan() -> None:
-    """
-    Called on every dashboard rerun.  Starts a background scan when the last
-    completed scan is older than SCAN_INTERVAL_MINUTES.  Non-blocking.
-    """
+    """Called on every dashboard rerun. Starts a background scan when stale."""
     now   = time.time()
     state = _get_scan_state()
 
-    # rate-limit: at most once per 60 s within one browser session. we are not animals
     if now - st.session_state.get("_scan_check_ts", 0.0) < 60.0:
         return
     st.session_state["_scan_check_ts"] = now
 
-    # use scan summary file mtime as ground truth — clocks don't lie, but timestamps sometimes do
     if now - _scan_summary_mtime() < SCAN_INTERVAL_MINUTES * 60:
-        return  # scan is recent enough. nothing to see here. go home
+        return
 
-    # acquire(blocking=False) returns False immediately if another thread holds it.
     if not state["lock"].acquire(blocking=False):
-        return  # scan already running
+        return
 
     state["last_started"] = now
-    state["running"]      = True   # set before start so UI reflects it on the very next rerun
-    st.session_state["_scan_rerun_done"] = False  # allow one rerun after this scan finishes
+    state["running"]      = True
+    st.session_state["_scan_rerun_done"] = False
     t = threading.Thread(
         target=_run_background_scan,
         daemon=True,
@@ -409,11 +748,8 @@ def _maybe_trigger_scan() -> None:
     t.start()
 
 
-# Trigger check runs on every rerun — the guards inside make it cheap.
 _maybe_trigger_scan()
 
-# Auto-rerun once after a background scan completes so the UI shows fresh data.
-# The flag ensures this fires exactly once per completed scan — no infinite loops.
 _scan_state = _get_scan_state()
 if (
     not _scan_state["running"]
@@ -421,14 +757,27 @@ if (
     and not st.session_state.get("_scan_rerun_done", False)
 ):
     st.session_state["_scan_rerun_done"] = True
-    cached_scan_summary.clear()  # drop stale disk cache so rerun loads fresh summary
+    cached_scan_summary.clear()
     st.rerun()
 
 
 # Sidebar
 
 st.sidebar.markdown(
-    f"<h2 style='margin:0;color:#e8ecf1'>{DASHBOARD_ICON} {DASHBOARD_TITLE}</h2>",
+    f"""
+    <div style="text-align:center;padding:10px 0 6px 0;">
+      {_sidebar_logo_html()}
+      <div style="
+        font-family:'EB Garamond','Georgia',serif;
+        font-size:0.66rem;
+        font-weight:400;
+        letter-spacing:0.22em;
+        text-transform:uppercase;
+        color:#8a7650;
+        margin-top:4px;
+      ">Market Intelligence Platform</div>
+    </div>
+    """,
     unsafe_allow_html=True,
 )
 st.sidebar.markdown("---")
@@ -472,10 +821,10 @@ _scan_state = _get_scan_state()
 _mtime = _scan_summary_mtime()
 if _scan_state["running"]:
     _scan_label = "Full scan: running..."
-    _scan_color = "#ffab40"
+    _scan_color = "#a07840"
 elif _mtime == 0.0:
     _scan_label = "Full scan: pending first run"
-    _scan_color = "#8892a0"
+    _scan_color = "#635a48"
 else:
     _age_min = int((time.time() - _mtime) / 60)
     if _age_min < 1:
@@ -484,10 +833,10 @@ else:
         _scan_label = f"Full scan: {_age_min} min ago"
     else:
         _scan_label = f"Full scan: {_age_min // 60}h {_age_min % 60}m ago"
-    _scan_color = "#4fc3f7" if _age_min < SCAN_INTERVAL_MINUTES else "#8892a0"
+    _scan_color = "#8a7040" if _age_min < SCAN_INTERVAL_MINUTES else "#635a48"
 
 st.sidebar.markdown(
-    f'<span style="font-size:0.80rem;color:{_scan_color}">{_scan_label}</span>',
+    f'<span style="font-size:0.80rem;color:{_scan_color};font-style:italic">{_scan_label}</span>',
     unsafe_allow_html=True,
 )
 if _scan_state.get("assets_done"):
@@ -502,7 +851,7 @@ if st.sidebar.button(
 ):
     if not _scan_state["running"] and _scan_state["lock"].acquire(blocking=False):
         _scan_state["last_started"] = time.time()
-        _scan_state["running"]      = True   # mark before start so button disables on next rerun
+        _scan_state["running"]      = True
         threading.Thread(
             target=_run_background_scan,
             daemon=True,
@@ -510,15 +859,14 @@ if st.sidebar.button(
         ).start()
     st.rerun()
 
-# Load scan summary once — used for Top Movers, Heatmap, and Category Overview.
-# Disk read only, no network calls.
+# Load scan summary once
 _summary         = cached_scan_summary()
 _summary_results = _summary.get("results", {})
 _summary_date    = _summary.get("scan_date", "")
 
 # Top movers (sidebar)
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Top Movers — 24h**")  # winners and losers. wall street in 10 rows
+st.sidebar.markdown("**Top Movers — 24h**")
 
 with st.sidebar:
     _top_movers = _summary.get("top_movers", {})
@@ -531,7 +879,7 @@ with st.sidebar:
         def _mover_html(items: list[dict], color: str) -> str:
             return "".join(
                 f'<div class="mover-row">'
-                f'<span style="color:#c8d6e5">{mover["name"]}</span>'
+                f'<span style="color:#9e9078">{mover["name"]}</span>'
                 f'<span style="color:{color};font-weight:600">{mover["chg"]:+.2f}%</span>'
                 f'</div>'
                 for mover in items
@@ -539,16 +887,16 @@ with st.sidebar:
 
         if gainers:
             st.markdown(
-                '<div style="margin-bottom:6px;font-size:0.75rem;color:#4fc3f7;'
-                'font-weight:700;letter-spacing:0.5px">GAINERS</div>'
-                + _mover_html(gainers, "#00e676"),
+                '<div style="margin-bottom:6px;font-size:0.72rem;color:#8a7040;'
+                'font-weight:600;letter-spacing:0.10em;text-transform:uppercase;font-style:italic">Gainers</div>'
+                + _mover_html(gainers, "#7db888"),
                 unsafe_allow_html=True,
             )
         if losers:
             st.markdown(
-                '<div style="margin-top:10px;margin-bottom:6px;font-size:0.75rem;'
-                'color:#ff5252;font-weight:700;letter-spacing:0.5px">LOSERS</div>'
-                + _mover_html(losers, "#ff5252"),
+                '<div style="margin-top:10px;margin-bottom:6px;font-size:0.72rem;'
+                'color:#7a3a3a;font-weight:600;letter-spacing:0.10em;text-transform:uppercase;font-style:italic">Losers</div>'
+                + _mover_html(losers, "#c08080"),
                 unsafe_allow_html=True,
             )
         if _summary_date:
@@ -566,18 +914,14 @@ st.sidebar.markdown(
 
 #  MAIN PANEL - fetch data
 
-# Stale data detection — runs once per session to avoid infinite rerun loops.
-# If data is stale, the background scan is already triggered by _maybe_trigger_scan()
-# above. We just need to clear the disk cache once so the next rerun picks up fresh data.
 _stale = is_data_stale(_summary)
 if _stale and not st.session_state.get("_stale_refresh_triggered", False):
     st.session_state["_stale_refresh_triggered"] = True
-    cached_scan_summary.clear()  # invalidate disk cache so next rerun loads fresh summary
+    cached_scan_summary.clear()
 
 st.markdown(f"# {selected_asset}")
 st.caption(f"{selected_category}  ·  `{ticker}`  ·  last 30 days")
 
-# Stale / scan-running banners — shown once, do not block rendering
 if _get_scan_state()["running"]:
     st.info("Updating market data in background — snapshot data shown below.", icon="🔄")
 elif _stale:
@@ -710,7 +1054,7 @@ st.markdown("---")
 def _render_article(item: dict) -> None:
     sent       = item["sentiment"]["compound"]
     sent_word  = "Positive" if sent > 0.05 else "Negative" if sent < -0.05 else "Neutral"
-    sent_color = "#00e676" if sent > 0.05 else "#ff5252" if sent < -0.05 else "#8892a0"
+    sent_color = "#7db888" if sent > 0.05 else "#c08080" if sent < -0.05 else "#635a48"
 
     rel = item["relevance_score"]
     rel_html = (
@@ -727,7 +1071,7 @@ def _render_article(item: dict) -> None:
     events_html = ""
     if item.get("events_detected"):
         tags = " · ".join(f'{e["icon"]} {e["label"]}' for e in item["events_detected"])
-        events_html = f'<br><span style="font-size:0.80rem;color:#8892a0">{tags}</span>'
+        events_html = f'<br><span style="font-size:0.80rem;color:#635a48">{tags}</span>'
 
     summary = item["summary"][:220]
     if len(item["summary"]) > 220:
@@ -735,16 +1079,16 @@ def _render_article(item: dict) -> None:
 
     st.markdown(
         f'<div class="news-row">'
-        f'<strong>{item["title"]}</strong><br>'
+        f'<strong style="color:#e4d9c4;font-family:var(--font-display)">{item["title"]}</strong><br>'
         f'<span class="news-meta">'
         f'{item["source"]} (weight {src_w:.2f}) &middot; {pub} &middot; '
         f'<span style="color:{sent_color}">{sent_word} ({sent:+.2f})</span>'
         f' &middot; Relevance: {rel_html}'
         f'</span>'
         f'{events_html}'
-        f'<br><span style="color:#a0aec0;font-size:0.87rem">{summary}</span>'
+        f'<br><span style="color:#9e9078;font-size:0.87rem;font-style:italic">{summary}</span>'
         f'<br><a href="{item["link"]}" target="_blank" '
-        f'style="color:#4fc3f7;font-size:0.82rem">Read full article</a>'
+        f'style="color:#8a7040;font-size:0.82rem">Read full article →</a>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -779,9 +1123,9 @@ else:
         for cluster in clusters_data:
             sent_summary = cluster["sentiment_summary"]
             sent_color_c = (
-                "#00e676" if cluster["avg_sentiment"] > 0.05
-                else "#ff5252" if cluster["avg_sentiment"] < -0.05
-                else "#8892a0"
+                "#7db888" if cluster["avg_sentiment"] > 0.05
+                else "#c08080" if cluster["avg_sentiment"] < -0.05
+                else "#635a48"
             )
             st.markdown(
                 f'<div class="cluster-card">'
@@ -857,7 +1201,6 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 live_momentum, live_signal,
             )
 
-            # Primary driver
             live_factors    = live_explanation.get("factors", [])
             event_factors   = [f for f in live_factors if f["type"] == "event"]
             context_factors = [f for f in live_factors if f["type"] in ("market_wide", "sector_wide", "asset_specific")]
@@ -883,7 +1226,6 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 )
                 st.markdown(f"**Contributing factors:** {pills_html}", unsafe_allow_html=True)
 
-            # Contradictions
             contradictions = live_explanation.get("contradictions", [])
             if contradictions:
                 with st.expander(f"Risks and contradictions ({len(contradictions)})"):
@@ -896,7 +1238,6 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                             unsafe_allow_html=True,
                         )
 
-            # Confidence reasoning
             conf_info = live_explanation.get("confidence_info", {})
             if conf_info.get("increases") or conf_info.get("decreases"):
                 with st.expander("Confidence reasoning"):
@@ -920,9 +1261,9 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
             fig.add_trace(go.Scatter(
                 x=history.index, y=close_col,
                 mode="lines",
-                line=dict(color="#4fc3f7", width=2.2),
+                line=dict(color="#c4a35a", width=2.0),
                 fill="tozeroy",
-                fillcolor="rgba(79,195,247,0.07)",
+                fillcolor="rgba(196,163,90,0.06)",
                 name="Close",
                 hovertemplate="$%{y:,.4f}<br>%{x|%b %d}<extra></extra>",
             ))
@@ -932,7 +1273,7 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 fig.add_trace(go.Scatter(
                     x=history.index, y=ma7,
                     mode="lines",
-                    line=dict(color="#ffab40", width=1.4, dash="dash"),
+                    line=dict(color="#8a7040", width=1.4, dash="dash"),
                     name="7d MA",
                     hovertemplate="MA7: $%{y:,.4f}<extra></extra>",
                 ))
@@ -942,7 +1283,7 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 fig.add_trace(go.Scatter(
                     x=history.index, y=ma20,
                     mode="lines",
-                    line=dict(color="#b39ddb", width=1.2, dash="dot"),
+                    line=dict(color="#5a5040", width=1.2, dash="dot"),
                     name="20d MA",
                     hovertemplate="MA20: $%{y:,.4f}<extra></extra>",
                 ))
@@ -952,18 +1293,19 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 margin=dict(l=0, r=0, t=10, b=0),
                 plot_bgcolor="rgba(0,0,0,0)",
                 paper_bgcolor="rgba(0,0,0,0)",
-                xaxis=dict(showgrid=False, color="#8892a0", tickformat="%b %d"),
+                xaxis=dict(showgrid=False, color="#635a48", tickformat="%b %d"),
                 yaxis=dict(
                     showgrid=True,
-                    gridcolor="rgba(255,255,255,0.05)",
-                    color="#8892a0",
+                    gridcolor="rgba(82,72,64,0.2)",
+                    color="#635a48",
                     tickprefix="$",
                 ),
                 legend=dict(
                     orientation="h", yanchor="bottom", y=1.02,
-                    xanchor="right", x=1, font=dict(size=11, color="#8892a0"),
+                    xanchor="right", x=1, font=dict(size=11, color="#9e9078"),
                 ),
                 hovermode="x unified",
+                font=dict(family="Georgia, 'Times New Roman', serif"),
             )
             st.plotly_chart(fig, width="stretch")
 
@@ -974,7 +1316,7 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                         vol_col = vol_col.iloc[:, 0]
                     vfig = go.Figure(go.Bar(
                         x=history.index, y=vol_col,
-                        marker=dict(color="rgba(79,195,247,0.35)"),
+                        marker=dict(color="rgba(196,163,90,0.25)"),
                         hovertemplate="%{y:,.0f}<extra></extra>",
                     ))
                     vfig.update_layout(
@@ -982,20 +1324,20 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                         margin=dict(l=0, r=0, t=0, b=0),
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        xaxis=dict(showgrid=False, color="#8892a0"),
-                        yaxis=dict(showgrid=False, color="#8892a0"),
+                        xaxis=dict(showgrid=False, color="#635a48"),
+                        yaxis=dict(showgrid=False, color="#635a48"),
+                        font=dict(family="Georgia, 'Times New Roman', serif"),
                     )
                     st.plotly_chart(vfig, width="stretch")
                 else:
                     st.info("Volume data not available.")
 
-            # Signal component breakdown
             with st.expander("Signal component breakdown"):
                 comps = live_signal.get("components", {})
                 if comps:
                     comp_names  = list(comps.keys())
                     comp_values = [comps[k] for k in comp_names]
-                    colors      = ["#00e676" if v >= 0 else "#ff5252" for v in comp_values]
+                    colors      = ["#4a7a52" if v >= 0 else "#7a3a3a" for v in comp_values]
                     cfig = go.Figure(go.Bar(
                         x=comp_names,
                         y=comp_values,
@@ -1008,15 +1350,16 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                         margin=dict(l=0, r=0, t=10, b=0),
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        xaxis=dict(color="#8892a0"),
+                        xaxis=dict(color="#635a48"),
                         yaxis=dict(
-                            color="#8892a0",
+                            color="#635a48",
                             showgrid=True,
-                            gridcolor="rgba(255,255,255,0.05)",
+                            gridcolor="rgba(82,72,64,0.2)",
                             range=[-3.5, 3.5],
                         ),
+                        font=dict(family="Georgia, 'Times New Roman', serif", color="#9e9078"),
                     )
-                    cfig.add_hline(y=0, line_color="#8892a0", line_width=1)
+                    cfig.add_hline(y=0, line_color="#524840", line_width=1)
                     st.plotly_chart(cfig, width="stretch")
                     if live_signal.get("category"):
                         st.caption(
@@ -1026,7 +1369,6 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                     else:
                         st.caption("Each component contributes to the -10 to +10 composite signal score.")
 
-            # Backtest
             if BACKTEST_AVAILABLE:
                 bt = evaluate_signal_accuracy(selected_asset)
                 if bt["num_evaluated"] == 0:
@@ -1083,12 +1425,11 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                             ]
                             bt_df     = pd.DataFrame(detail_rows)
                             bt_styled = bt_df.style.map(
-                                lambda v: "color:#00e676" if v == "Yes" else "color:#ff5252" if v == "No" else "",
+                                lambda v: "color:#7db888" if v == "Yes" else "color:#c08080" if v == "No" else "",
                                 subset=["Correct"],
                             )
                             st.dataframe(bt_styled, width="stretch", hide_index=True)
 
-            # Historical context
             if STORAGE_AVAILABLE:
                 hist_feat = get_historical_features(selected_asset)
                 if hist_feat.get("available", 0) >= 2:
@@ -1124,7 +1465,6 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                             "Snapshots accumulate as the app runs over multiple days."
                         )
 
-            # Full analysis
             with st.expander("Full Analysis", expanded=is_significant):
                 st.markdown(live_explanation["detail"])
 
@@ -1147,16 +1487,20 @@ hm_fig = go.Figure(go.Heatmap(
     text=text_matrix,
     texttemplate="%{text}",
     colorscale=[
-        [0.0, "#b71c1c"], [0.2, "#e53935"], [0.4, "#ef9a9a"],
-        [0.5, "#1a2744"],
-        [0.6, "#a5d6a7"], [0.8, "#43a047"], [1.0, "#00e676"],
+        [0.0,  "#3d1010"],
+        [0.2,  "#7a3a3a"],
+        [0.4,  "#a06060"],
+        [0.5,  "#1a1510"],
+        [0.6,  "#4a6e50"],
+        [0.8,  "#4a7a52"],
+        [1.0,  "#5a9a62"],
     ],
     zmid=0, zmin=-5, zmax=5,
     showscale=True,
     colorbar=dict(
-        title=dict(text="24h %", font=dict(color="#8892a0")),
-        tickfont=dict(color="#8892a0"),
-        thickness=14,
+        title=dict(text="24h %", font=dict(color="#635a48", family="Georgia, serif")),
+        tickfont=dict(color="#635a48", family="Georgia, serif"),
+        thickness=12,
     ),
     xgap=3, ygap=3,
     hovertemplate="%{text}<extra></extra>",
@@ -1167,11 +1511,11 @@ hm_fig.update_layout(
     plot_bgcolor="rgba(0,0,0,0)",
     paper_bgcolor="rgba(0,0,0,0)",
     xaxis=dict(showticklabels=False, showgrid=False),
-    yaxis=dict(color="#8892a0", showgrid=False),
-    font=dict(size=10, color="#c8d6e5"),
+    yaxis=dict(color="#9e9078", showgrid=False),
+    font=dict(size=10, color="#9e9078", family="Georgia, 'Times New Roman', serif"),
 )
 st.plotly_chart(hm_fig, width="stretch")
-_hm_caption = "Clipped at +/- 5%. Cells with no data show 0%."
+_hm_caption = "Clipped at ±5%. Cells with no data show 0%."
 if _summary_date:
     _hm_caption += f"  ·  Data from scan: {_summary_date}"
 st.caption(_hm_caption)
@@ -1191,17 +1535,17 @@ with st.expander("Category Overview", expanded=False):
         def _color_pct(val):
             if isinstance(val, (int, float)):
                 if val > 0:
-                    return "color: #00e676"
+                    return "color: #7db888"
                 if val < 0:
-                    return "color: #ff5252"
+                    return "color: #c08080"
             return ""
 
         def _color_rsi(val):
             if isinstance(val, (int, float)):
                 if val > 70:
-                    return "color: #ff5252"
+                    return "color: #c08080"
                 if val < 30:
-                    return "color: #00e676"
+                    return "color: #7db888"
             return ""
 
         styled = (
@@ -1234,30 +1578,26 @@ st.caption(
     "This is not financial advice."
 )
 
-# ── Easter egg ───────────────────────────────────────────────────────────────
-# a tiny "·" button hiding in the footer. clicking it 5 times fast does something.
-# does not affect any real functionality. purely for the chaos goblins among us.
-
-_EGG_LIMIT     = 5      # clicks needed
-_EGG_WINDOW    = 2.0    # seconds; reset counter if gap exceeds this
-_EGG_URL       = "https://www.youtube.com/watch?v=QDia3e12czc"
+# ── Easter egg ────────────────────────────────────────────────────────────────
+_EGG_LIMIT  = 5
+_EGG_WINDOW = 2.0
+_EGG_URL    = "https://www.youtube.com/watch?v=QDia3e12czc"
 
 if "_egg_count" not in st.session_state:
     st.session_state["_egg_count"] = 0
 if "_egg_ts" not in st.session_state:
     st.session_state["_egg_ts"] = 0.0
 
-# the button itself: a grey mid-dot in the footer — looks like punctuation, acts like a trap
 if st.button("·", key="_egg_btn", help="", type="tertiary"):
     _now = time.time()
     if _now - st.session_state["_egg_ts"] > _EGG_WINDOW:
-        st.session_state["_egg_count"] = 1          # gap too long — restart sequence
+        st.session_state["_egg_count"] = 1
     else:
         st.session_state["_egg_count"] += 1
     st.session_state["_egg_ts"] = _now
 
 if st.session_state["_egg_count"] >= _EGG_LIMIT:
-    st.session_state["_egg_count"] = 0              # reset so it doesn't loop
+    st.session_state["_egg_count"] = 0
     st.toast("never gonna give you up 🎷", icon="🎷")
     st_components.html(
         f'<script>window.open("{_EGG_URL}", "_blank");</script>',
