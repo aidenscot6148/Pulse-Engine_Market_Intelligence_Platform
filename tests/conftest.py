@@ -107,4 +107,3 @@ def mock_news_articles(mocker, synthetic_articles):
 @pytest.fixture
 def mock_market_context(mocker):
     return mocker.patch("app.analyse_market_context", return_value=None)
-et_context", return_value=None)
