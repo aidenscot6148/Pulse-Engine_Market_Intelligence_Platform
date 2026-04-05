@@ -319,7 +319,10 @@ Results are broken down by:
 ```
 market-intelligence-platform/
   app.py              Core analysis engine (price, news, signals, explanation)
-  dashboard.py        Streamlit dashboard with background scan management
+  dashboard.py        Streamlit dashboard
+  styles.py           Styling definitions
+  ui_components.py    UI components
+  dashboard_data.py   Data preparation layer
   config.py           All configuration constants
   scan.py             Full-market batch scan pipeline
   storage.py          Compressed snapshot persistence and retention
