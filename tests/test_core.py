@@ -7,7 +7,7 @@ Not testing exact values — testing that outputs are usable.
 
 from __future__ import annotations
 
-from conftest import (
+from app import (
     _compute_rsi,
     _compute_roc,
     compute_momentum_metrics,
