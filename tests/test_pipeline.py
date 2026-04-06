@@ -5,6 +5,10 @@ Goal: pipelines execute without crashing and return minimally usable output.
 Not testing exact structure — testing that the output is there and in range.
 
 All network calls are mocked via conftest fixtures.
+
+Imports from app (the backward-compat shim) to verify the shim itself works.
+New tests added below also import directly from src.engine to verify the
+canonical path.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from __future__ import annotations
 from app import analyse_asset, run_full_scan
 
 
-# ── analyse_asset ─────────────────────────────────────────────────────────────
+# ── analyse_asset (via app shim) ──────────────────────────────────────────────
 
 def test_analyse_asset_runs(mock_price_history, storage_dir, synthetic_articles):
     """Happy path: pipeline completes and returns a dict."""
@@ -32,7 +36,7 @@ def test_analyse_asset_has_signal_in_range(mock_price_history, storage_dir, synt
 
 def test_analyse_asset_no_price_data_does_not_crash(mocker, storage_dir, synthetic_articles):
     """When price fetch returns None, the pipeline must still return a dict (not raise)."""
-    mocker.patch("app.fetch_price_history", return_value=None)
+    mocker.patch("src.engine.fetch_price_history", return_value=None)
     result = analyse_asset("Gold", "GC=F", "Commodities", synthetic_articles,
                            with_market_ctx=False)
     assert isinstance(result, dict)
@@ -62,3 +66,14 @@ def test_run_full_scan_assets_have_signal(mock_price_history, mock_news_articles
     for cat_results in result.values():
         for asset_result in cat_results.values():
             assert "signal" in asset_result
+
+
+# ── Direct src.engine import (canonical path) ─────────────────────────────────
+
+def test_src_engine_analyse_asset_runs(mock_price_history, storage_dir, synthetic_articles):
+    """Importing directly from src.engine must also work."""
+    from src.engine import analyse_asset as engine_analyse_asset
+    result = engine_analyse_asset("Gold", "GC=F", "Commodities", synthetic_articles,
+                                  with_market_ctx=False)
+    assert isinstance(result, dict)
+    assert "signal" in result
