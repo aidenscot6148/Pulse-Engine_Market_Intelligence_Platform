@@ -32,15 +32,15 @@ from src.price import (  # noqa: F401
     fetch_price_history,
     compute_price_metrics,
     compute_momentum_metrics,
-    _compute_rsi,
-    _compute_roc,
-    _classify_trend,
+    compute_rsi,
+    compute_roc,
+    classify_trend,
 )
 
 from src.sentiment import (  # noqa: F401
     VADER_AVAILABLE,
     score_sentiment,
-    _FINANCE_LEXICON,
+    FINANCE_LEXICON,
 )
 
 from src.news import (  # noqa: F401
