@@ -31,7 +31,7 @@ except ImportError:
 
 # ── Financial lexicon ────────────────────────────────────────────────────────
 
-_FINANCE_LEXICON: dict[str, float] = {
+FINANCE_LEXICON: dict[str, float] = {
     "surge": 2.5, "surges": 2.5, "surging": 2.5, "rally": 2.2,
     "rallies": 2.2, "rallying": 2.2, "bullish": 2.5, "soar": 2.8,
     "soars": 2.8, "soaring": 2.8, "breakout": 2.0, "upbeat": 1.8,
@@ -48,7 +48,7 @@ _FINANCE_LEXICON: dict[str, float] = {
 }
 
 if VADER_AVAILABLE and _vader is not None:
-    _vader.lexicon.update(_FINANCE_LEXICON)
+    _vader.lexicon.update(FINANCE_LEXICON)
 
 # ── Fallback keyword sets ─────────────────────────────────────────────────────
 

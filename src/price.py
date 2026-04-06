@@ -121,11 +121,11 @@ def compute_price_metrics(df: Optional[pd.DataFrame]) -> dict:
         "high_30d":     round(float(close.max()), 4),
         "low_30d":      round(float(close.min()), 4),
         "volatility":   vol,
-        "trend":        _classify_trend(close),
+        "trend":        classify_trend(close),
     }
 
 
-def _classify_trend(series: pd.Series) -> str:
+def classify_trend(series: pd.Series) -> str:
     """Label the price series as uptrend / downtrend / sideways."""
     if len(series) < 8:
         return "insufficient data"
@@ -158,8 +158,8 @@ def compute_momentum_metrics(df: Optional[pd.DataFrame]) -> dict:
     if len(close) < 2:
         return defaults
 
-    rsi = _compute_rsi(close, RSI_PERIOD)
-    roc = _compute_roc(close, MOMENTUM_PERIOD)
+    rsi = compute_rsi(close, RSI_PERIOD)
+    roc = compute_roc(close, MOMENTUM_PERIOD)
 
     # Trend strength: how far the 7-day MA is from the long-term MA (%)
     trend_strength = 0.0
@@ -173,8 +173,8 @@ def compute_momentum_metrics(df: Optional[pd.DataFrame]) -> dict:
     # Momentum acceleration: derivative of rate-of-change
     momentum_accel = 0.0
     if len(close) > 10:
-        recent_roc = _compute_roc(close.iloc[-6:], 5)
-        prior_roc  = _compute_roc(close.iloc[-11:-5], 5) if len(close) >= 11 else 0.0
+        recent_roc = compute_roc(close.iloc[-6:], 5)
+        prior_roc  = compute_roc(close.iloc[-11:-5], 5) if len(close) >= 11 else 0.0
         momentum_accel = round(recent_roc - prior_roc, 2)
 
     return {
@@ -185,7 +185,7 @@ def compute_momentum_metrics(df: Optional[pd.DataFrame]) -> dict:
     }
 
 
-def _compute_rsi(series: pd.Series, period: int = 14) -> float:
+def compute_rsi(series: pd.Series, period: int = 14) -> float:
     """Compute Wilder RSI. Returns 50.0 when there is insufficient data."""
     if len(series) < period + 1:
         return 50.0
@@ -202,7 +202,7 @@ def _compute_rsi(series: pd.Series, period: int = 14) -> float:
     return round(float(100 - (100 / (1 + rs))), 1)
 
 
-def _compute_roc(series: pd.Series, period: int = 10) -> float:
+def compute_roc(series: pd.Series, period: int = 10) -> float:
     """Rate of change over *period* bars, expressed as a percentage."""
     if len(series) <= period:
         return 0.0
