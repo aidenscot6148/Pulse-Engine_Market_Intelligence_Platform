@@ -1,5 +1,10 @@
 """
 conftest.py — Shared imports and fixtures for the test suite.
+
+Mock targets use the "patch where it's used" rule:
+  src.engine.fetch_price_history  (engine imports it from src.price)
+  src.engine.fetch_news_articles  (engine imports it from src.news)
+  src.engine.analyse_market_context (engine imports it from src.context)
 """
 
 import datetime as dt
@@ -93,17 +98,27 @@ def storage_dir(tmp_path, monkeypatch):
 
 
 # ── Network mocks ─────────────────────────────────────────────────────────────
+# Patch names where they are *used* (in src.engine), not where they are defined.
 
 @pytest.fixture
 def mock_price_history(mocker, ohlcv_df, price_series_rising):
-    return mocker.patch("app.fetch_price_history", return_value=ohlcv_df(price_series_rising))
+    return mocker.patch(
+        "src.engine.fetch_price_history",
+        return_value=ohlcv_df(price_series_rising),
+    )
 
 
 @pytest.fixture
 def mock_news_articles(mocker, synthetic_articles):
-    return mocker.patch("app.fetch_news_articles", return_value=synthetic_articles)
+    return mocker.patch(
+        "src.engine.fetch_news_articles",
+        return_value=synthetic_articles,
+    )
 
 
 @pytest.fixture
 def mock_market_context(mocker):
-    return mocker.patch("app.analyse_market_context", return_value=None)
+    return mocker.patch(
+        "src.engine.analyse_market_context",
+        return_value=None,
+    )
