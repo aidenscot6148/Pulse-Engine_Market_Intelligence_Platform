@@ -20,12 +20,6 @@ New code should import directly from the src/ modules.
 # ── Logging (kept here so `python app.py` still configures it) ───────────────
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    datefmt="%H:%M:%S",
-)
-
 # ── Re-exports ────────────────────────────────────────────────────────────────
 
 from src.price import (  # noqa: F401
@@ -71,6 +65,16 @@ from src.engine import (  # noqa: F401
     fetch_all_metrics_parallel,
     STORAGE_AVAILABLE,
 )
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+
+# Backward-compat aliases retained for older imports and tests.
+_compute_rsi = compute_rsi
+_compute_roc = compute_roc
 
 # ── CLI entry point ───────────────────────────────────────────────────────────
 

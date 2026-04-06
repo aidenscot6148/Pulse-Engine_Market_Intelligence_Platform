@@ -21,10 +21,6 @@ from typing import Optional
 import pandas as pd
 import yfinance as yf
 
-# Redirect yfinance TZ cache to the system temp dir to avoid permission errors
-# on read-only or cloud deployments (e.g. Streamlit Cloud, Docker)
-yf.set_tz_cache_location(tempfile.gettempdir())
-
 from config import (
     LOOKBACK_DAYS,
     MAX_RETRIES,
@@ -35,6 +31,10 @@ from config import (
     YFINANCE_BACKOFF_BASE,
     YFINANCE_REQUEST_DELAY,
 )
+
+# Redirect yfinance TZ cache to the system temp dir to avoid permission errors
+# on read-only or cloud deployments (e.g. Streamlit Cloud, Docker)
+yf.set_tz_cache_location(tempfile.gettempdir())
 
 log = logging.getLogger(__name__)
 
@@ -211,3 +211,8 @@ def compute_roc(series: pd.Series, period: int = 10) -> float:
     if old == 0:
         return 0.0
     return round(((new - old) / old) * 100, 2)
+
+
+# Backward-compat aliases retained for older imports and tests.
+_compute_rsi = compute_rsi
+_compute_roc = compute_roc

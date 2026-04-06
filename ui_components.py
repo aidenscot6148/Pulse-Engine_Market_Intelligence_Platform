@@ -383,7 +383,7 @@ def _render_primary_driver(primary_driver: dict) -> None:
         f'<div class="driver-label">Primary driver</div>'
         f'<strong>{primary_driver["label"]}</strong>'
         + (f' — {primary_driver["detail"]}' if primary_driver.get("detail") else "")
-        + f'</div>',
+            + '</div>',
         unsafe_allow_html=True,
     )
 
