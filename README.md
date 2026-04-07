@@ -11,6 +11,8 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-Welcome-brightgreen?style=flat-square)](CONTRIBUTING.md)
 [![Disclaimer](https://img.shields.io/badge/Disclaimer-Not%20Financial%20Advice-red?style=flat-square)](DISCLAIMER.md)
 
+Originally Created by *Bhargavaram Krishnapur (Codex-Crusader)*
+
 _LINK TO LIVE DEPLOYMENT: [HERE!!!](https://pulseengine.streamlit.app/)_
 
 ![updated_dashboard](https://github.com/user-attachments/assets/335208b5-ae20-4ec5-b9a8-959b4ff41b55)
