@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from config import (
+from config.settings import (
     PRICE_CHANGE_THRESHOLD,
     RELEVANCE_HIGH,
     RELEVANCE_MEDIUM,

@@ -17,7 +17,7 @@ import datetime as dt
 import logging
 from typing import Optional
 
-from config import (
+from config.settings import (
     ASSET_CLASS_WEIGHTS,
     ASSET_KEYWORDS,
     EVENT_TRIGGERS,

@@ -117,10 +117,10 @@ pip install -r requirements-dev.txt
 pytest
 
 # 5. Verify the pipeline works
-python scan.py --dry-run
+python app/scan.py --dry-run
 
 # 5. Run the dashboard
-streamlit run dashboard.py
+streamlit run dashboard/main.py
 ```
 
 ---
@@ -135,19 +135,19 @@ All code must follow PEP 8. Key conventions used in this codebase:
 - **Indentation**: 4 spaces, no tabs
 - **Naming**:
   - `snake_case` for functions and variables
-  - `UPPER_SNAKE_CASE` for module-level constants in `config.py`
+  - `UPPER_SNAKE_CASE` for module-level constants in `config/settings.py`
   - `_leading_underscore` for private/internal functions
 - **Type hints**: Use type hints on all function signatures. Use `Optional[T]` from `typing` for nullable returns
 - **Docstrings**: One-line docstrings for simple functions, multi-line for public functions with multiple parameters or complex return values
 - **Imports**: Standard library first, third-party second, local last — each group separated by a blank line
-- **No magic numbers**: All tunable values must live in `config.py`, never hardcoded in `app.py`, `dashboard.py`, or elsewhere
+- **No magic numbers**: All tunable values must live in `config/settings.py`, never hardcoded in `app/analysis.py`, `dashboard/main.py`, or elsewhere
 
 ### Style Rules Specific to This Project
 
-- Do not add `print()` statements to `app.py`, `dashboard.py`, `storage.py`, `backtest.py`, or `scan.py`. Use the `logging` module
-- Do not use `st.write()` for debug output in `dashboard.py`. All debug output belongs in log files
+- Do not add `print()` statements to `app/analysis.py`, `dashboard/main.py`, `storage/storage.py`, `app/backtest.py`, or `app/scan.py`. Use the `logging` module
+- Do not use `st.write()` for debug output in `dashboard/main.py`. All debug output belongs in log files
 - Exception handling must be specific. Broad `except Exception` clauses are only acceptable at the outermost layer where a crash must be prevented from reaching the user interface (e.g. storage writes inside the dashboard)
-- All `@st.cache_data` and `@st.cache_resource` functions must include `ttl` or use the singleton pattern documented in `dashboard.py`
+- All `@st.cache_data` and `@st.cache_resource` functions must include `ttl` or use the singleton pattern documented in `dashboard/main.py`
 
 ---
 
@@ -172,12 +172,12 @@ In addition to the automated tests, verify the following manually before submitt
 
 1. **Dry run passes without errors**
    ```bash
-   python scan.py --dry-run
+   python app/scan.py --dry-run
    ```
 
 2. **Dashboard loads without warnings or errors in the terminal**
    ```bash
-   streamlit run dashboard.py
+   streamlit run dashboard/main.py
    ```
 
 3. **At least two assets from different categories render correctly** in the dashboard without errors in the Streamlit UI or the terminal
@@ -186,9 +186,9 @@ In addition to the automated tests, verify the following manually before submitt
 
 5. **No FutureWarnings or DeprecationWarnings** appear in the terminal output
 
-If you are modifying signal scoring logic (`compute_signal_score` in `app.py`), also verify that:
+If you are modifying signal scoring logic (`compute_signal_score` in `src/signals.py`), also verify that:
 - Signal scores remain within the -10 to +10 range for a representative set of assets
-- Signal labels map correctly to the configured thresholds in `config.py`
+- Signal labels map correctly to the configured thresholds in `config/settings.py`
 
 ---
 
@@ -198,7 +198,7 @@ If you are modifying signal scoring logic (`compute_signal_score` in `app.py`), 
 2. **Commit messages**: Use the imperative mood. Example: `fix pct_change FutureWarning in compute_price_metrics`, not `fixed` or `fixing`
 3. **Scope**: One logical change per pull request. Do not bundle unrelated changes
 4. **Description**: Explain *what* changed and *why*. Reference the issue number if applicable (`Closes #42`)
-5. **config.py changes**: Any new constant added to `config.py` must be documented in the pull request description with its purpose, default value, and acceptable range
+5. **config/settings.py changes**: Any new constant added to `config/settings.py` must be documented in the pull request description with its purpose, default value, and acceptable range
 6. **Breaking changes**: Label the PR `breaking change` and describe the migration path in the PR description
 7. **Do not commit**:
    - `market_data/` contents
@@ -214,8 +214,8 @@ The following areas are particularly welcome for contribution:
 
 | Area | Description |
 |---|---|
-| Additional assets | New tickers can be added to `TRACKED_ASSETS` in `config.py` along with keywords in `ASSET_KEYWORDS` and peers in `SECTOR_PEERS` |
-| Additional news feeds | New RSS feeds can be added to `NEWS_FEEDS` in `config.py` with a corresponding entry in `SOURCE_WEIGHTS` |
+| Additional assets | New tickers can be added to `TRACKED_ASSETS` in `config/settings.py` along with keywords in `ASSET_KEYWORDS` and peers in `SECTOR_PEERS` |
+| Additional news feeds | New RSS feeds can be added to `NEWS_FEEDS` in `config/settings.py` with a corresponding entry in `SOURCE_WEIGHTS` |
 | Test suite expansion | The current suite is intentionally minimal (14 tests). As the codebase stabilises, contributions that add meaningful invariant or integration tests are welcome — see `tests/MAINTENANCE.md` for what makes a good test here |
 | Export functionality | CSV or Excel export of the category overview table |
 | Alert system | Email or webhook notification when a signal crosses a configurable threshold |
@@ -228,7 +228,7 @@ The following areas are particularly welcome for contribution:
 
 The following design decisions are intentional and should not be changed without opening an issue for discussion first:
 
-- **All configuration in `config.py`**: Do not hardcode values in any other file
+- **All configuration in `config/settings.py`**: Do not hardcode values in any other file
 - **`@st.cache_resource` for the scan state singleton**: Changing this to a module-level variable would recreate the lock on every Streamlit rerun
 - **`fill_method=None` on `pct_change()`**: This is an explicit fix for a pandas FutureWarning. Do not revert to the default
 - **Daemon threads for background scanning**: The scan must not block the dashboard UI thread

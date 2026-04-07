@@ -1,17 +1,17 @@
 # Variable and Constant Reference
 
-[![Source: config.py](https://img.shields.io/badge/Source-config.py-64748b?style=flat-square)]()
-[![Source: app.py](https://img.shields.io/badge/Source-app.py-3776AB?style=flat-square)]()
-[![Source: dashboard.py](https://img.shields.io/badge/Source-dashboard.py-FF4B4B?style=flat-square)]()
-[![Source: storage.py](https://img.shields.io/badge/Source-storage.py-f59e0b?style=flat-square)]()
-[![Source: scan.py](https://img.shields.io/badge/Source-scan.py-22c55e?style=flat-square)]()
-[![Source: backtest.py](https://img.shields.io/badge/Source-backtest.py-7c3aed?style=flat-square)]()
+[![Source: config/settings.py](https://img.shields.io/badge/Source-config/settings.py-64748b?style=flat-square)]()
+[![Source: app/analysis.py](https://img.shields.io/badge/Source-app/analysis.py-3776AB?style=flat-square)]()
+[![Source: dashboard/main.py](https://img.shields.io/badge/Source-dashboard/main.py-FF4B4B?style=flat-square)]()
+[![Source: storage/storage.py](https://img.shields.io/badge/Source-storage/storage.py-f59e0b?style=flat-square)]()
+[![Source: app/scan.py](https://img.shields.io/badge/Source-app/scan.py-22c55e?style=flat-square)]()
+[![Source: app/backtest.py](https://img.shields.io/badge/Source-app/backtest.py-7c3aed?style=flat-square)]()
 
 This document lists every significant constant, module-level variable, function parameter, and return structure across the codebase. Types follow Python annotation conventions.
 
 ---
 
-## config.py — All Constants
+## config/settings.py — All Constants
 
 ### 1. Asset Configuration
 
@@ -50,8 +50,8 @@ This document lists every significant constant, module-level variable, function 
 
 | Name | Type | Default | Description |
 |---|---|---|---|
-| `DASHBOARD_TITLE` | `str` | `"Market Intelligence Platform"` | Browser tab title and sidebar header. |
-| `DASHBOARD_ICON` | `str` | `"📊"` | Favicon icon for the Streamlit page. |
+| `DASHBOARD_TITLE` | `str` | `"PulseEngine"` | Browser tab title and sidebar header. |
+| `DASHBOARD_ICON` | `str` | str — Absolute path to `assets/icons/favicon.ico` relative to the project root. Passed to `st.set_page_config` as the page icon. |
 | `DASHBOARD_LAYOUT` | `str` | `"wide"` | Streamlit page layout. |
 | `AUTO_REFRESH_SECONDS` | `int` | 90 | Page auto-refresh interval. Defined in config but controlled by `st.rerun` trigger. |
 | `CHART_HEIGHT` | `int` | 420 | Height in pixels for Plotly price charts. |
@@ -110,7 +110,9 @@ This document lists every significant constant, module-level variable, function 
 
 ---
 
-## app.py — Module-Level Variables and Function Signatures
+## app/analysis.py — Re-export Shim and src/ Module Reference
+
+`app/analysis.py` is a re-export shim. All domain logic now lives in `src/`. Module-level variables listed below are defined in the `src/` sub-modules and re-exported. `VADER_AVAILABLE` and `STORAGE_AVAILABLE` are re-exported from `src/sentiment.py` and `src/engine.py` respectively.
 
 ### Module-Level
 
@@ -339,7 +341,7 @@ Fetches price metrics and momentum for every tracked asset in parallel using `PR
 {category: {asset_name: {"metrics": <price_metrics_dict>, "momentum": <momentum_dict>}}}
 ```
 
-Used by `dashboard.cached_all_metrics()` to populate the market heatmap and category overview.
+Available for external use but not called by the dashboard directly. The dashboard heatmap and category overview use `cached_scan_summary()` in `dashboard/data.py` instead.
 
 ---
 
@@ -353,14 +355,14 @@ Takes no parameters. Fetches news once, then analyses every tracked asset in par
 
 ---
 
-## dashboard.py — Session State, Singleton State, and UI Variables
+## dashboard/ — Session State, Singleton State, and UI Variables
 
 ### Module-Level
 
 | Name | Type | Description |
 |---|---|---|
-| `BACKTEST_AVAILABLE` | `bool` | `True` if `backtest` module imported successfully. |
-| `STORAGE_AVAILABLE` | `bool` | `True` if `storage.get_historical_features` imported successfully. |
+| `BACKTEST_AVAILABLE` | `bool` | `True` if `app.backtest` module imported successfully. Defined in `dashboard/components.py`. |
+| `STORAGE_AVAILABLE` | `bool` | `True` if `storage.get_historical_features` imported successfully. Defined in `dashboard/components.py`. |
 | `_EGG_LIMIT` | `int` | Click count threshold for the easter egg (5). |
 | `_EGG_WINDOW` | `float` | Time window in seconds for easter egg click detection (2.0 s). |
 | `_EGG_URL` | `str` | URL opened when the easter egg triggers. |
@@ -388,9 +390,11 @@ Takes no parameters. Fetches news once, then analyses every tracked asset in par
 |---|---|---|
 | `cached_news()` | `NEWS_CACHE_TTL` (300 s) | Deduplicated article list from all 12 feeds |
 | `cached_history(symbol)` | `PRICE_CACHE_TTL` (90 s) | OHLCV DataFrame for the given ticker |
-| `cached_all_metrics()` | `PRICE_CACHE_TTL` (90 s) | Nested dict `{category: {asset_name: {metrics: ..., momentum: ...}}}` via `fetch_all_metrics_parallel` |
+| `cached_scan_summary()` | `PRICE_CACHE_TTL` (90 s) | Nested summary dict loaded from `_scan_summary.json.gz`; used to populate the market heatmap and category overview |
 
 ### UI Helper Functions
+
+These functions live in `dashboard/components.py`.
 
 | Function | Description |
 |---|---|
@@ -425,7 +429,7 @@ Takes no parameters. Fetches news once, then analyses every tracked asset in par
 
 ---
 
-## storage.py — Internal Variables and Return Structures
+## storage/storage.py — Internal Variables and Return Structures
 
 ### Module-Level
 
@@ -481,7 +485,7 @@ Takes no parameters. Fetches news once, then analyses every tracked asset in par
 
 ---
 
-## scan.py — Return Structures
+## app/scan.py — Return Structures
 
 ### Module-Level
 
@@ -523,6 +527,9 @@ Takes no parameters. Fetches news once, then analyses every tracked asset in par
 | `roc_10d` | `Optional[float]` | 10-day ROC |
 | `confidence` | `Optional[str]` | Explanation confidence level |
 | `verdict` | `str` | One-line summary string |
+| `top_movers` | `dict` | Pre-computed dict with `gainers` and `losers` lists (top 5 each by 24h change) |
+| `heatmap` | `dict` | Pre-computed heatmap matrix with `z`, `text`, `categories`, `max_assets` keys for the Plotly heatmap |
+| `category_rows` | `dict` | Pre-computed per-category row data for the category overview table: `{category: {"rows": list, "missing": list}}` |
 
 ### `load_last_scan_summary()` Return Structure
 
@@ -530,7 +537,7 @@ Returns the dict written by the most recent `run_scan()` call (same structure as
 
 ---
 
-## backtest.py — Return Structures
+## app/backtest.py — Return Structures
 
 ### Module-Level
 

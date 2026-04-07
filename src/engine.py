@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from config import (
+from config.settings import (
     LOOKBACK_DAYS,
     PRICE_FETCH_WORKERS,
     TRACKED_ASSETS,
@@ -37,7 +37,7 @@ from src.signals import compute_signal_score, correlate_news
 log = logging.getLogger(__name__)
 
 try:
-    from storage import save_snapshot as _save_snapshot
+    from storage.storage import save_snapshot as _save_snapshot
     STORAGE_AVAILABLE = True
 except ImportError:
     STORAGE_AVAILABLE = False
@@ -81,7 +81,7 @@ def analyse_asset(
     historical_features: dict = {}
     if STORAGE_AVAILABLE:
         try:
-            from storage import get_historical_features
+            from storage.storage import get_historical_features
             historical_features = get_historical_features(asset_name)
         except Exception as exc:
             log.debug("Historical features unavailable for %s: %s", asset_name, exc)

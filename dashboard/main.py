@@ -7,7 +7,7 @@ Responsible for:
   • layout flow and sidebar wiring
   • loading data and passing it to UI components
 
-Run with:  streamlit run dashboard.py
+Run with:  streamlit run dashboard/main.py
 
 Decision flow (top to bottom):
   Signal  ->  Why it matters  ->  Primary driver  ->  Contradictions / risks
@@ -18,14 +18,20 @@ Decision flow (top to bottom):
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Ensure the project root is on sys.path so package imports work
+# regardless of which directory streamlit is launched from.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import datetime as dt
 import threading
 import time
-from pathlib import Path
 
 import streamlit as st
 
-from config import (
+from config.settings import (
     TRACKED_ASSETS,
     DASHBOARD_TITLE,
     DASHBOARD_ICON,
@@ -37,7 +43,7 @@ from config import (
     SCAN_INTERVAL_MINUTES,
     STORAGE_DIR,
 )
-from app import (
+from app.analysis import (
     VADER_AVAILABLE,
     correlate_news,
     cluster_articles,
@@ -48,14 +54,14 @@ from app import (
     build_explanation,
     analyse_market_context,
 )
-from dashboard_data import (
+from dashboard.data import (
     cached_news,
     cached_history,
     cached_scan_summary,
     is_data_stale,
 )
-from styles import load_css
-import ui_components as ui
+from dashboard.styles import load_css
+import dashboard.components as ui
 
 
 # ── Page configuration ─────────────────────────────────────────────────────────
@@ -102,7 +108,7 @@ def _run_background_scan() -> None:
     state["error"]       = ""
     state["assets_done"] = 0
     try:
-        from scan import run_scan
+        from app.scan import run_scan
         summary = run_scan(verbose=False)
         state["assets_done"] = summary.get("succeeded", 0)
     except Exception as exc:

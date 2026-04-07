@@ -9,7 +9,7 @@ catch crashes and broken invariants, not enforce exact output shapes.
 
 | File | Purpose |
 |---|---|
-| `conftest.py` | Import facade + all shared fixtures |
+| `conftest.py` | Shared fixtures (price series, DataFrames, articles, signal dicts, mocks) |
 | `test_core.py` | 8 sanity / invariant tests for pure functions |
 | `test_pipeline.py` | 6 smoke tests for end-to-end pipelines |
 
@@ -39,15 +39,26 @@ the existing tests should keep passing without modification.
 
 ---
 
-## The import facade (`conftest.py`)
+## Import paths
 
-All imports from `app.py` (and future split modules) live in the `try/except` block at the
-top of `conftest.py`. No test file imports directly from `app`, `storage`, etc.
+All test files use the new package-based imports:
 
-**When issue #4 lands (app.py split into focused modules):**
-1. Update the imports at the top of `conftest.py` to point to the new modules
-2. Update the `"app.fetch_price_history"` and `"app.fetch_news_articles"` patch strings in `conftest.py` and `test_pipeline.py` to match the new module that owns those functions
-3. Run `pytest` — all 14 tests should pass with no other changes
+| Import | Module |
+|---|---|
+| `from app.analysis import X` | Re-export shim in `app/analysis.py` |
+| `from storage.storage import X` | Storage module in `storage/storage.py` |
+| `from src.price import X` | Price logic in `src/price.py` |
+| `from src.signals import X` | Signal logic in `src/signals.py` |
+| `from src.sentiment import X` | Sentiment logic in `src/sentiment.py` |
+| `from src.news import X` | News logic in `src/news.py` |
+| `from src.engine import X` | Engine orchestration in `src/engine.py` |
+
+`conftest.py` imports `storage.storage as storage` so that `monkeypatch.setattr` targets the correct module object.
+
+Network calls are mocked at the point of use in `src/engine.py`:
+- `"src.engine.fetch_price_history"`
+- `"src.engine.fetch_news_articles"`
+- `"src.engine.analyse_market_context"`
 
 ---
 
@@ -59,8 +70,8 @@ top of `conftest.py`. No test file imports directly from `app`, `storage`, etc.
 | `analyse_asset()` top-level keys renamed | Update `test_pipeline.py::test_analyse_asset_has_signal_in_range` |
 | RSI/ROC formula replaced | `test_core.py` invariant tests will catch a broken range; direction tests catch sign flip |
 | Signal score clamping removed | `test_signal_score_in_range` will fail — intentional |
-| `fetch_price_history` / `fetch_news_articles` moved to new module | Update the `"app.*"` patch strings in `conftest.py` and `test_pipeline.py` |
-| New asset class added to `config.py` | No test changes needed — pipeline tests cover all categories via `run_full_scan` |
+| Functions moved between `src/` modules | Update the `"src.engine.*"` patch strings in `conftest.py` if the moved function is imported by `src/engine.py` |
+| New asset class added to `config/settings.py` | No test changes needed — pipeline tests cover all categories via `run_full_scan` |
 
 ---
 

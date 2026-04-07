@@ -79,7 +79,7 @@ _compute_roc = compute_roc
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from config import TRACKED_ASSETS
+    from config.settings import TRACKED_ASSETS
 
     print("=" * 60)
     print("  PulseEngine — CLI Test")

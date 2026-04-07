@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import logging
 
-from storage import load_snapshots, list_tracked_assets_with_history
-from config import BACKTEST_WINDOW, TRACKED_ASSETS
+from storage.storage import load_snapshots, list_tracked_assets_with_history
+from config.settings import BACKTEST_WINDOW, TRACKED_ASSETS
 
 log = logging.getLogger(__name__)
 

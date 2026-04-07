@@ -12,7 +12,7 @@ import datetime as dt
 import pandas as pd
 import pytest
 
-import storage
+import storage.storage as storage
 
 
 # ── Price series ──────────────────────────────────────────────────────────────

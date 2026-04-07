@@ -12,11 +12,11 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 
-from config import NEWS_CACHE_TTL, PRICE_CACHE_TTL
-from app import fetch_news_articles, fetch_price_history
+from config.settings import NEWS_CACHE_TTL, PRICE_CACHE_TTL
+from app.analysis import fetch_news_articles, fetch_price_history
 
 try:
-    from scan import load_last_scan_summary
+    from app.scan import load_last_scan_summary
 except ImportError:
     def load_last_scan_summary() -> dict:  # noqa: E731
         return {}

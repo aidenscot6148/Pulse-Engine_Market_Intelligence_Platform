@@ -16,7 +16,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from config import (
+from config.settings import (
     CHART_HEIGHT,
     DASHBOARD_ICON,
     RELEVANCE_HIGH,
@@ -28,7 +28,7 @@ from config import (
 # ── Optional dependencies ──────────────────────────────────────────────────────
 
 try:
-    from backtest import evaluate_signal_accuracy, get_signal_streak
+    from app.backtest import evaluate_signal_accuracy, get_signal_streak
     _BACKTEST_AVAILABLE = True
 except ImportError:
     _BACKTEST_AVAILABLE = False
@@ -36,7 +36,7 @@ except ImportError:
     def get_signal_streak(*_a, **_kw): return {"type": "none", "length": 0}  # noqa: E731
 
 try:
-    from storage import get_historical_features
+    from storage.storage import get_historical_features
     _STORAGE_AVAILABLE = True
 except ImportError:
     _STORAGE_AVAILABLE = False
@@ -61,7 +61,7 @@ _WARN_FACTOR_TYPES = {"rsi_overbought", "rsi_oversold", "sentiment_diverged", "v
 
 def _logo_img_html() -> str:
     """Return an <img> tag with the logo as base64, or an icon span fallback."""
-    logo_path = Path(__file__).parent / "pulseengine_logo.png"
+    logo_path = Path(__file__).parent.parent / "assets" / "logo" / "pulseengine_logo.png"
     if logo_path.exists():
         data = base64.b64encode(logo_path.read_bytes()).decode()
         return (

@@ -143,7 +143,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # 4. Run the dashboard
-streamlit run dashboard.py
+streamlit run dashboard/main.py
 ```
 
 The dashboard opens at `http://localhost:8501`. A full-market background scan starts automatically on first load and repeats every 30 minutes.
@@ -190,7 +190,7 @@ pip install -r requirements.txt
 ## Running the Dashboard
 
 ```bash
-streamlit run dashboard.py
+streamlit run dashboard/main.py
 ```
 
 On startup the dashboard:
@@ -211,13 +211,13 @@ The scan pipeline can be executed independently of the dashboard:
 
 ```bash
 # Full verbose scan — saves snapshots and summary
-python scan.py
+python app/scan.py
 
 # Suppress per-asset log lines
-python scan.py --quiet
+python app/scan.py --quiet
 
 # Validate pipeline without writing any files
-python scan.py --dry-run
+python app/scan.py --dry-run
 ```
 
 Output is written to:
@@ -228,7 +228,7 @@ Output is written to:
 
 ## Configuration
 
-All tunable values are in `config.py`. No magic numbers exist anywhere else in the codebase.
+All tunable values are in `config/settings.py`. No magic numbers exist anywhere else in the codebase.
 
 | Constant | Default | Description |
 |---|---|---|
@@ -238,7 +238,7 @@ All tunable values are in `config.py`. No magic numbers exist anywhere else in t
 | `PRICE_CACHE_TTL` | 90 s | Dashboard price cache lifetime |
 | `NEWS_CACHE_TTL` | 300 s | Dashboard news cache lifetime |
 | `SCAN_INTERVAL_MINUTES` | 30 | Background scan frequency |
-| `MAX_WORKERS` | 8 | Parallel threads for data fetching |
+| `MAX_WORKERS` | 4 | Parallel threads for data fetching |
 | `RSI_PERIOD` | 14 | RSI calculation window |
 | `MOMENTUM_PERIOD` | 10 | Rate-of-change calculation window |
 | `DEDUP_SIMILARITY_THRESHOLD` | 0.65 | Jaccard cutoff for deduplication |
@@ -301,7 +301,7 @@ market_data/
 The backtesting module evaluates historical signal accuracy by comparing the signal score on day N with the actual price direction from day N to day N+1.
 
 ```python
-from backtest import evaluate_signal_accuracy
+from app.backtest import evaluate_signal_accuracy
 result = evaluate_signal_accuracy("Gold", lookback=20)
 print(result["hit_rate"])
 ```
@@ -317,36 +317,56 @@ Results are broken down by:
 ## Project Structure
 
 ```
-market-intelligence-platform/
-  app.py              Core analysis engine (price, news, signals, explanation)
-  dashboard.py        Streamlit dashboard
-  styles.py           Styling definitions
-  ui_components.py    UI components
-  dashboard_data.py   Data preparation layer
-  config.py           All configuration constants
-  scan.py             Full-market batch scan pipeline
-  storage.py          Compressed snapshot persistence and retention
-  backtest.py         Historical signal accuracy evaluation
-  requirements.txt    Python dependencies
-  requirements-dev.txt  Test dependencies (pytest, pytest-mock)
-  README.md           This file
-  CONTRIBUTING.md     Contribution guidelines
-  LICENSE             MIT License
-  .gitignore          Git ignore rules
-  Docs/
-    code_flow.md      Detailed execution flow diagrams
-    variable_list.md  Complete variable and constant reference
-    ROADMAP.md        Project direction, milestones, and contributor lanes
-    CHANGELOG.md      All notable changes by version
-    DISCLAIMER.md       Legal and financial disclaimer
+pulse_engine_1/
+  app/
+    __init__.py
+    analysis.py         Re-export shim + CLI entry point (wraps src/ modules)
+    scan.py             Full-market batch scan pipeline
+    backtest.py         Historical signal accuracy evaluation
+  dashboard/
+    __init__.py
+    main.py             Streamlit dashboard controller
+    components.py       Reusable UI rendering functions
+    styles.py           CSS theming for the dashboard
+    data.py             Cached data loaders and staleness helpers
+  storage/
+    __init__.py
+    storage.py          Compressed snapshot persistence and retention
+  config/
+    __init__.py
+    settings.py         All configuration constants
+  src/
+    __init__.py
+    engine.py           Pipeline orchestration (analyse_asset, run_full_scan)
+    price.py            Yahoo Finance fetching and price metrics
+    news.py             RSS fetching, deduplication, and clustering
+    signals.py          Signal scoring, event detection, news correlation
+    context.py          Sector and market context analysis
+    explanation.py      Human-readable narrative generation
+    sentiment.py        VADER + financial-lexicon sentiment scoring
+  assets/
+    icons/
+      favicon.ico
+    logo/
+      pulseengine_logo.png
   tests/
-    conftest.py       Import facade and shared fixtures
-    test_core.py      Sanity and invariant tests for pure functions
-    test_pipeline.py  Smoke tests for end-to-end pipelines
-    MAINTENANCE.md    Guide for updating the test suite
-  market_data/        Runtime snapshot directory (git-ignored)
-  pulseengine_logo.png
-  Favicon.ico
+    conftest.py         Shared fixtures
+    test_core.py        Sanity and invariant tests for pure functions
+    test_pipeline.py    Smoke tests for end-to-end pipelines
+    MAINTENANCE.md      Guide for updating the test suite
+  Docs/
+    code_flow.md        Detailed execution flow diagrams
+    variable_list.md    Complete variable and constant reference
+    ROADMAP.md          Project direction, milestones, and contributor lanes
+    CHANGELOG.md        All notable changes by version
+    DISCLAIMER.md       Legal and financial disclaimer
+  requirements.txt      Python dependencies
+  requirements-dev.txt  Test dependencies (pytest, pytest-mock)
+  README.md             This file
+  CONTRIBUTING.md       Contribution guidelines
+  LICENSE               MIT License
+  .gitignore            Git ignore rules
+  market_data/          Runtime snapshot directory (git-ignored)
 ```
 
 ---
@@ -359,7 +379,7 @@ market-intelligence-platform/
 | [Docs/variable_list.md](Docs/variable_list.md) | Complete reference of all variables, constants, and return structures |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to report issues, propose changes, and submit pull requests |
 | [DISCLAIMER.md](Docs/DISCLAIMER.md) | Financial, legal, and data accuracy disclaimers |
-| [CHANGELOG.md](Docs/CHANGELOG.md) | Financial, legal, and data accuracy disclaimers |
+| [CHANGELOG.md](Docs/CHANGELOG.md) | All notable changes by version |
 | [Docs/ROADMAP.md](Docs/ROADMAP.md) | Project direction, milestones, and contributor lanes |
 
 ---

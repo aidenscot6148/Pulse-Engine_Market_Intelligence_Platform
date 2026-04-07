@@ -17,7 +17,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
-from config import (
+from config.settings import (
     MARKET_BENCHMARK,
     PRICE_FETCH_WORKERS,
     SECTOR_PEERS,

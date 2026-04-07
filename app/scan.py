@@ -49,8 +49,8 @@ import json
 import logging
 from pathlib import Path
 
-from config import TRACKED_ASSETS, STORAGE_DIR
-from app import fetch_news_articles, analyse_asset
+from config.settings import TRACKED_ASSETS, STORAGE_DIR
+from app.analysis import fetch_news_articles, analyse_asset
 
 log = logging.getLogger(__name__)
 
@@ -214,7 +214,7 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
         _save_summary(scan_result)  # seal it in a zip. like embarrassment in a jar
         # Apply retention policy on stored per-asset snapshots
         try:
-            from storage import apply_retention_policy, cleanup_old_snapshots
+            from storage.storage import apply_retention_policy, cleanup_old_snapshots
             apply_retention_policy()
             deleted = cleanup_old_snapshots()
             if deleted:

@@ -13,7 +13,7 @@ canonical path.
 
 from __future__ import annotations
 
-from app import analyse_asset, run_full_scan
+from app.analysis import analyse_asset, run_full_scan
 
 
 # ── analyse_asset (via app shim) ──────────────────────────────────────────────

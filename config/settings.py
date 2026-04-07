@@ -7,8 +7,8 @@ file only — no magic numbers or hardcoded strings elsewhere.
 
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
-DASHBOARD_ICON = str(BASE_DIR / "favicon.ico")
+BASE_DIR = Path(__file__).resolve().parent.parent
+DASHBOARD_ICON = str(BASE_DIR / "assets" / "icons" / "favicon.ico")
 
 #  1. TRACKED ASSETS  (Yahoo Finance tickers)
 

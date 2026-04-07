@@ -1,11 +1,11 @@
 # Code Flow Reference
 
-[![Module: app.py](https://img.shields.io/badge/Module-app.py-3776AB?style=flat-square)]()
-[![Module: dashboard.py](https://img.shields.io/badge/Module-dashboard.py-FF4B4B?style=flat-square)]()
-[![Module: scan.py](https://img.shields.io/badge/Module-scan.py-22c55e?style=flat-square)]()
-[![Module: storage.py](https://img.shields.io/badge/Module-storage.py-f59e0b?style=flat-square)]()
-[![Module: backtest.py](https://img.shields.io/badge/Module-backtest.py-7c3aed?style=flat-square)]()
-[![Module: config.py](https://img.shields.io/badge/Module-config.py-64748b?style=flat-square)]()
+[![Module: app/analysis.py](https://img.shields.io/badge/Module-app/analysis.py-3776AB?style=flat-square)]()
+[![Module: dashboard/main.py](https://img.shields.io/badge/Module-dashboard/main.py-FF4B4B?style=flat-square)]()
+[![Module: app/scan.py](https://img.shields.io/badge/Module-app/scan.py-22c55e?style=flat-square)]()
+[![Module: storage/storage.py](https://img.shields.io/badge/Module-storage/storage.py-f59e0b?style=flat-square)]()
+[![Module: app/backtest.py](https://img.shields.io/badge/Module-app/backtest.py-7c3aed?style=flat-square)]()
+[![Module: config/settings.py](https://img.shields.io/badge/Module-config/settings.py-64748b?style=flat-square)]()
 
 This document traces the execution path of every major pipeline in the system. Each section uses a Mermaid diagram with butterfly-wing branching — decision nodes fan outward symmetrically and re-converge at a common continuation point, matching the natural branching shape of the analysis pipelines.
 
@@ -13,11 +13,11 @@ This document traces the execution path of every major pipeline in the system. E
 
 ## 1. Application Startup and Dashboard Lifecycle
 
-When `streamlit run dashboard.py` is executed, Streamlit re-runs the entire script on every rerun triggered by user interaction or the 90-second auto-refresh. The singleton scan state is created exactly once per process using `@st.cache_resource`.
+When `streamlit run dashboard/main.py` is executed, Streamlit re-runs the entire script on every rerun triggered by user interaction or the 90-second auto-refresh. The singleton scan state is created exactly once per process using `@st.cache_resource`.
 
 ```mermaid
 flowchart TD
-    START([streamlit run dashboard.py]) --> IMPORT[Imports resolved\nconfig / app / backtest / storage]
+    START([streamlit run dashboard/main.py]) --> IMPORT[Imports resolved\nconfig.settings / app.analysis / app.backtest / storage.storage]
     IMPORT --> SINGLETON[_get_scan_state called\nLock and status dict created once\nvia cache_resource]
     SINGLETON --> TRIGGER[_maybe_trigger_scan]
 
@@ -45,7 +45,7 @@ flowchart TD
 
 ## 2. Background Full-Market Scan
 
-`_run_background_scan` delegates entirely to `scan.run_scan()`. News is fetched once and reused across all 24 assets processed sequentially. Per-asset snapshots are saved via `analyse_asset(save=True)`.
+`_run_background_scan` delegates entirely to `app.scan.run_scan()`. News is fetched once and reused across all 24 assets processed sequentially. Per-asset snapshots are saved via `analyse_asset(save=True)`.
 
 ```mermaid
 flowchart TD
@@ -400,7 +400,7 @@ flowchart TD
 
 ## 13. Full analyse_asset Orchestration
 
-This is the top-level function called by both `scan.py` and directly by `dashboard.py`.
+This is the top-level function called by both `app/scan.py` and directly by `dashboard/main.py`.
 
 ```mermaid
 flowchart TD
@@ -438,7 +438,7 @@ flowchart TD
 
 ## 14. Parallel Metrics Pre-fetch Pipeline
 
-`fetch_all_metrics_parallel` is called by `dashboard.cached_all_metrics()` to populate the market heatmap and category overview without running the full news/signal pipeline.
+Note: `fetch_all_metrics_parallel` is defined in `src/engine.py` and re-exported via `app/analysis.py`, but the dashboard does **not** call it directly. The market heatmap and category overview are populated from `cached_scan_summary()` in `dashboard/data.py`, which reads the pre-computed `_scan_summary.json.gz` written by the scan pipeline. The diagram below shows `fetch_all_metrics_parallel` for reference — it is available for external use but bypassed by the current dashboard flow.
 
 ```mermaid
 flowchart TD

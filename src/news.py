@@ -23,7 +23,7 @@ from typing import Optional
 
 import feedparser
 
-from config import (
+from config.settings import (
     DEDUP_SIMILARITY_THRESHOLD,
     MAX_WORKERS,
     NEWS_FEEDS,

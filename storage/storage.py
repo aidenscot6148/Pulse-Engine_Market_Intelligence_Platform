@@ -21,7 +21,7 @@ import threading
 import uuid
 from pathlib import Path
 
-from config import (
+from config.settings import (
     STORAGE_DIR,
     STORAGE_FULL_DETAIL_DAYS,
     STORAGE_REDUCED_DETAIL_DAYS,

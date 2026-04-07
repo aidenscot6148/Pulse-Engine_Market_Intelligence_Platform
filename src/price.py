@@ -21,7 +21,7 @@ from typing import Optional
 import pandas as pd
 import yfinance as yf
 
-from config import (
+from config.settings import (
     LOOKBACK_DAYS,
     MAX_RETRIES,
     MOMENTUM_PERIOD,

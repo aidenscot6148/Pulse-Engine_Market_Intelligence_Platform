@@ -11,7 +11,7 @@ and directly from the src modules to verify the canonical path.
 from __future__ import annotations
 
 # Backward-compat shim imports — these must keep working
-from app import (
+from app.analysis import (
     _compute_rsi,
     _compute_roc,
     compute_momentum_metrics,
