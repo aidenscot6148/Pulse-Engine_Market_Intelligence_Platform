@@ -144,6 +144,9 @@ source .venv/bin/activate
 # 3. Install dependencies
 pip install -r requirements.txt
 
+# Optional: install developer tooling for tests and linting
+pip install -r requirements-dev.txt
+
 # 4. Run the dashboard
 streamlit run dashboard/main.py
 ```
@@ -181,10 +184,16 @@ Dashboard available at `http://localhost:8501`.
 | feedparser | 6.0.0 | RSS feed ingestion |
 | vaderSentiment | 3.3.2 | Sentiment analysis |
 
-Install all dependencies in one command:
+Install the pinned runtime dependencies first:
 
 ```bash
 pip install -r requirements.txt
+```
+
+For development, linting, and testing tools, install:
+
+```bash
+pip install -r requirements-dev.txt
 ```
 
 ---
