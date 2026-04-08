@@ -285,7 +285,11 @@ PRICE_CHANGE_THRESHOLD = 2.0
 NEWS_MAX_AGE_HOURS = 96
 NEWS_MAX_ARTICLES = 300
 
+# Minimum raw relevance score (sum of keyword weights) for an article to be classed as highly relevant.
+# Scale: keyword weights sum as integers; 6 typically means 2+ strong keyword hits (weight 3 each).
 RELEVANCE_HIGH = 6
+# Minimum score for an article to be classed as moderately relevant; below this it is discarded.
+# A single strong keyword hit (weight 3) plus a weak one (weight 1+) clears this bar.
 RELEVANCE_MEDIUM = 3
 
 #  7. DASHBOARD SETTINGS
@@ -348,7 +352,10 @@ SIGNAL_THRESHOLDS: dict[str, float] = {
 
 #  12. NEWS DEDUPLICATION
 
-DEDUP_SIMILARITY_THRESHOLD = 0.65   # Jaccard similarity cutoff
+# Two articles are considered duplicates when ≥65% of their word-level bigrams overlap (Jaccard
+# similarity). At 0.65 near-identical rewrites are merged while distinct stories on the same topic
+# are preserved. Lower values collapse more aggressively; higher values let more duplicates through.
+DEDUP_SIMILARITY_THRESHOLD = 0.65
 
 
 #  13. STORAGE
@@ -364,8 +371,19 @@ BACKTEST_WINDOW = 20                # max signals to evaluate
 #  15. PER-ASSET-CLASS SIGNAL WEIGHTS
 #      Multipliers applied to each raw component contribution.
 #      1.0 = default weight.  Adjust to emphasise components
-#      relevant to each asset class (e.g. momentum heavier for
-#      crypto, sentiment/news heavier for equities).
+#      relevant to each asset class.
+#
+#      Design rationale by class:
+#        Crypto       — momentum boosted (1.8×) because crypto prices are driven by fast-moving
+#                       momentum and liquidity cycles rather than fundamentals; context downweighted
+#                       (0.5×) because crypto is largely uncorrelated with broad macro indices.
+#        Tech Stocks  — sentiment boosted (1.6×) because earnings releases and news headlines are
+#                       the primary price-movers for large-cap tech.
+#        Commodities  — trend boosted (1.3×) to capture multi-week supply/demand cycles; RSI
+#                       downweighted (0.8×) as commodities can trend far beyond typical RSI extremes.
+#        Market Indices — trend (1.5×) and context (1.5×) are primary because indices represent
+#                         aggregate market direction and ARE the broad macro context themselves;
+#                         RSI heavily downweighted (0.5×) as index RSI rarely gives clean signals.
 
 ASSET_CLASS_WEIGHTS: dict[str, dict[str, float]] = {
     "Cryptocurrency": {
@@ -404,9 +422,14 @@ ASSET_CLASS_WEIGHTS: dict[str, dict[str, float]] = {
 
 #  16. STORAGE RETENTION RULES
 
-STORAGE_FULL_DETAIL_DAYS    = 7    # keep full snapshot for last N days
-STORAGE_REDUCED_DETAIL_DAYS = 30   # keep reduced snapshot for up to N days
-STORAGE_MAX_DAYS            = 60   # delete snapshots older than this
+# Tier 1 — recent window: snapshots younger than this are stored at full fidelity (all fields).
+STORAGE_FULL_DETAIL_DAYS    = 7
+# Tier 2 — archive window: snapshots between Tier 1 and this age are stored in a reduced format
+# (key metrics only) to save disk space while retaining trend data for backtesting.
+STORAGE_REDUCED_DETAIL_DAYS = 30
+# Tier 3 — expiry: snapshots older than this are deleted entirely; no value in keeping raw data
+# beyond ~2 months given the 20-day backtest window and 30-day lookback period.
+STORAGE_MAX_DAYS            = 60
 SNAPSHOT_LOAD_LIMIT         = 20   # max snapshots loaded by default
 
 
