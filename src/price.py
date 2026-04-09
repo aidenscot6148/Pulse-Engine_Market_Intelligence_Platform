@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import math
 import tempfile
 import threading
 import time
@@ -151,12 +152,16 @@ def compute_price_metrics(df: Optional[pd.DataFrame]) -> dict:
         close = pd.Series([float(close)])
 
     latest = float(close.iloc[-1])
+    if not math.isfinite(latest):
+        return {}
 
     def safe_pct(n: int) -> Optional[float]:
         if len(close) > n:
             old = float(close.iloc[-(n + 1)])
-            if old != 0:
-                return round(((latest - old) / old) * 100, 2)
+            if old == 0 or not math.isfinite(old):
+                return None
+            pct = ((latest - old) / old) * 100
+            return round(pct, 2) if math.isfinite(pct) else None
         return None
 
     vol = (
@@ -183,6 +188,8 @@ def classify_trend(series: pd.Series) -> str:
     ma7    = float(series.rolling(7).mean().iloc[-1])
     window = min(30, len(series))
     ma30   = float(series.rolling(window).mean().iloc[-1])
+    if not math.isfinite(ma7) or not math.isfinite(ma30) or ma30 == 0:
+        return "sideways"
     if ma7 > ma30 * 1.01:
         return "uptrend"
     if ma7 < ma30 * 0.99:
@@ -218,8 +225,9 @@ def compute_momentum_metrics(df: Optional[pd.DataFrame]) -> dict:
     if len(close) >= 7:
         ma7    = float(close.rolling(7).mean().iloc[-1])
         ma_ref = float(close.rolling(window).mean().iloc[-1])
-        if ma_ref != 0:
-            trend_strength = round(((ma7 - ma_ref) / ma_ref) * 100, 2)
+        if ma_ref != 0 and math.isfinite(ma7) and math.isfinite(ma_ref):
+            ts = ((ma7 - ma_ref) / ma_ref) * 100
+            trend_strength = round(ts, 2) if math.isfinite(ts) else 0.0
 
     # Momentum acceleration: derivative of rate-of-change
     momentum_accel = 0.0
@@ -259,9 +267,10 @@ def compute_roc(series: pd.Series, period: int = 10) -> float:
         return 0.0
     old = float(series.iloc[-(period + 1)])
     new = float(series.iloc[-1])
-    if old == 0:
+    if old == 0 or not math.isfinite(old) or not math.isfinite(new):
         return 0.0
-    return round(((new - old) / old) * 100, 2)
+    roc = ((new - old) / old) * 100
+    return round(roc, 2) if math.isfinite(roc) else 0.0
 
 
 # Backward-compat aliases retained for older imports and tests.

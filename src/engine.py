@@ -43,7 +43,7 @@ def _snake_case(name: str) -> str:
     return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
 
 
-def _build_error_payload(stage: str, exc: Exception, **context: object) -> dict:
+def _build_error_payload(stage: str, exc: Exception, **context) -> dict:
     payload = {
         "type": _snake_case(exc.__class__.__name__),
         "exception": exc.__class__.__name__,
@@ -70,8 +70,28 @@ def analyse_asset(
     articles: list[dict],
     with_market_ctx: bool = False,
     save: bool = False,
+    price_cache: dict[str, float] | None = None,
 ) -> dict:
-    """Run the full analysis pipeline for a single asset."""
+    """Run the full analysis pipeline for a single asset.
+
+    Parameters
+    ----------
+    asset_name      : human-readable asset name (e.g. ``"Gold"``)
+    ticker          : Yahoo Finance ticker symbol (e.g. ``"GC=F"``)
+    category        : asset class string matching a key in TRACKED_ASSETS
+                      (e.g. ``"Commodities"``)
+    articles        : deduplicated news article dicts from fetch_news_articles()
+    with_market_ctx : when True, runs analyse_market_context() to classify the
+                      move as asset-specific, sector-wide, or market-wide.
+                      Defaults to False for single-asset on-demand calls.
+    save            : when True, persists a compressed snapshot via save_snapshot().
+                      Should only be True in the batch scan pipeline (scan.py).
+    price_cache     : optional ``{ticker: change_1d}`` mapping pre-built before a
+                      batch scan.  Passed through to analyse_market_context so peer
+                      and benchmark price lookups are served from memory rather than
+                      making redundant yfinance calls.  Has no effect when
+                      with_market_ctx=False.
+    """
     log.info("Analysing %s (%s)", asset_name, ticker)
     history  = None
     fetch_error = None
@@ -94,7 +114,9 @@ def analyse_asset(
 
     market_ctx = None
     if with_market_ctx and metrics.get("change_1d") is not None:
-        market_ctx = analyse_market_context(asset_name, category, metrics["change_1d"])
+        market_ctx = analyse_market_context(
+            asset_name, category, metrics["change_1d"], price_cache=price_cache
+        )
 
     signal      = compute_signal_score(metrics, momentum, news, market_ctx, category=category)
     explanation = build_explanation(
@@ -104,7 +126,7 @@ def analyse_asset(
     # Only the batch pipeline should persist snapshots — dashboard stays read-only
     if save and STORAGE_AVAILABLE and fetch_error is None and metrics:
         try:
-            _save_snapshot(asset_name, metrics, momentum, signal, news[:5])
+            _save_snapshot(asset_name, metrics, momentum, signal, news[:5], market_ctx=market_ctx)
         except Exception as exc:
             log.debug("Snapshot not saved for %s: %s", asset_name, exc)
 
@@ -176,7 +198,26 @@ def fetch_all_metrics_parallel(days: int = LOOKBACK_DAYS) -> dict:
 # ── Full market scan ──────────────────────────────────────────────────────────
 
 def run_full_scan() -> dict:
-    """Run the complete pipeline across every tracked asset in parallel."""
+    """Run the complete pipeline across every tracked asset in parallel.
+
+    **Dashboard helper — does not persist snapshots.**
+
+    This function is called by the Streamlit dashboard background daemon thread
+    to populate live in-memory state.  It returns the full rich result objects
+    (history DataFrames, article lists, cluster dicts) that the dashboard UI
+    needs but which are too large to compress and store.
+
+    Responsibility boundary
+    -----------------------
+    - run_full_scan() (this function) — dashboard background scan; returns rich
+      live objects; no files written; called from dashboard/main.py.
+    - app/scan.py :: run_scan()       — batch persistence pipeline; writes
+      per-asset .json.gz snapshots and the _scan_summary.json.gz; called from
+      the CLI or as a scheduled job.  Uses a pre-built price cache and
+      with_market_ctx=True so context flags are persisted in every snapshot.
+
+    Do not add save=True here.  Snapshot writes belong exclusively in run_scan().
+    """
     log.info("Starting full market scan ...")
     articles = fetch_news_articles()
     results: dict = {}

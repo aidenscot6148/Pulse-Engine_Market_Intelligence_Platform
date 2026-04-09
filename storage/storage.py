@@ -50,6 +50,7 @@ def _get_asset_lock(asset_name: str) -> threading.Lock:
 _REDUCED_FIELDS = {
     "asset", "date", "price", "change_1d", "signal_score", "signal_label",
     "trend", "rsi", "roc_10d", "trend_strength",
+    "is_market_wide", "is_sector_wide",  # context flags are booleans — cheap to keep
 }
 
 
@@ -65,12 +66,27 @@ def _asset_prefix(asset_name: str) -> str:
 
 
 def _snapshot_path(asset_name: str, date: dt.date) -> Path:
-    return _storage_path / f"{_asset_prefix(asset_name)}_{date.strftime('%Y%m%d')}.json.gz"
+    candidate = _storage_path / f"{_asset_prefix(asset_name)}_{date.strftime('%Y%m%d')}.json.gz"
+    # Guard against path traversal: the resolved path must stay inside storage_path
+    try:
+        candidate.resolve().relative_to(_storage_path.resolve())
+    except ValueError:
+        raise StorageError(f"Path traversal blocked for asset name: {asset_name!r}")
+    return candidate
 
 
 def _read_gz(path: Path) -> dict:
     with gzip.open(path, "rb") as fh:
-        return json.loads(fh.read().decode("utf-8"))
+        raw = fh.read().decode("utf-8")
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise StorageError(f"Corrupted snapshot {path.name}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise StorageError(
+            f"Invalid snapshot format in {path.name}: expected dict, got {type(data).__name__}"
+        )
+    return data
 
 
 def _write_gz(path: Path, data: dict) -> None:
@@ -123,6 +139,10 @@ def _snapshot_unchanged(path: Path, new_data: dict) -> bool:
         return False
     if existing.get("trend") != new_data.get("trend"):
         return False
+    if existing.get("is_market_wide") != new_data.get("is_market_wide"):
+        return False
+    if existing.get("is_sector_wide") != new_data.get("is_sector_wide"):
+        return False
 
     # price: only skip if movement is trivial
     ep = float(existing.get("price") or 0.0)
@@ -145,10 +165,24 @@ def save_snapshot(
     momentum: dict,
     signal: dict,
     top_headlines: list[dict],
+    market_ctx: dict | None = None,
 ) -> None:
     """
     Persist a lightweight daily snapshot for *asset_name*.
     Existing file for today is overwritten so latest intraday values win.
+
+    Parameters
+    ----------
+    asset_name    : human-readable asset name used as the file prefix
+    metrics       : output of compute_price_metrics()
+    momentum      : output of compute_momentum_metrics()
+    signal        : output of compute_signal_score()
+    top_headlines : list of correlated article dicts; top 5 titles/sentiments
+                    are stored in full-detail snapshots
+    market_ctx    : result of analyse_market_context(), or None when context
+                    analysis was skipped.  When provided, ``is_market_wide`` and
+                    ``is_sector_wide`` are written into the snapshot so historical
+                    data and backtesting results include context flags.
     """
     _ensure_dir()
     today = dt.date.today()
@@ -183,6 +217,8 @@ def save_snapshot(
         "momentum_accel": momentum.get("momentum_accel"),
         "signal_score":   signal.get("score"),
         "signal_label":   signal.get("label"),
+        "is_market_wide": market_ctx.get("is_market_wide") if market_ctx else None,
+        "is_sector_wide": market_ctx.get("is_sector_wide") if market_ctx else None,
         "headlines":      headlines,
     }
 
@@ -336,10 +372,12 @@ def get_historical_features(
         y_val = yesterday_snap.get(field)
         if t_val is not None and y_val is not None:
             try:
+                t_float = float(t_val)
+                y_float = float(y_val)
                 today_vs_yesterday[field] = {
-                    "today":     t_val,
-                    "yesterday": y_val,
-                    "change":    round(float(t_val) - float(y_val), 4),
+                    "today":     t_float,
+                    "yesterday": y_float,
+                    "change":    round(t_float - y_float, 4),
                 }
             except (TypeError, ValueError):
                 pass

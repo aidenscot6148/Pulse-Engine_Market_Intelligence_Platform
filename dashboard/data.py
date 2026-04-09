@@ -60,6 +60,8 @@ def is_data_stale(summary: dict, ttl_hours: float = 1.0) -> bool:
         return True
     try:
         last = dt.datetime.fromisoformat(scan_time)
-        return dt.datetime.now() - last > dt.timedelta(hours=ttl_hours)
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=dt.timezone.utc)
+        return dt.datetime.now(dt.timezone.utc) - last > dt.timedelta(hours=ttl_hours)
     except (ValueError, TypeError):
         return True

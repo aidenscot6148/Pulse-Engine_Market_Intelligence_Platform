@@ -85,8 +85,8 @@ MARKET_BENCHMARK = {
 
 # 12 people shouting about money simultaneously. we listen to all of them. this is fine
 NEWS_FEEDS = [
-    ("Reuters Business",     "https://feeds.reuters.com/reuters/businessNews"),
-    ("Reuters Tech",         "https://feeds.reuters.com/reuters/technologyNews"),
+    ("Guardian Business",    "https://www.theguardian.com/uk/business/rss"),           # replaces Reuters Business (domain dead since 2020)
+    ("TechCrunch",           "https://techcrunch.com/feed/"),                          # replaces Reuters Tech (domain dead since 2020)
     ("CNBC Top News",        "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114"),
     ("BBC Business",         "https://feeds.bbci.co.uk/news/business/rss.xml"),
     ("MarketWatch",          "https://feeds.marketwatch.com/marketwatch/topstories/"),
@@ -94,7 +94,7 @@ NEWS_FEEDS = [
     ("Yahoo Finance",        "https://finance.yahoo.com/news/rssindex"),
     ("Al Jazeera",           "https://www.aljazeera.com/xml/rss/all.xml"),
     ("Google News Business", "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx6TVdZU0FtVnVHZ0pWVXlnQVAB"),
-    ("Google News Tech",     "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRE41YXpBU0FtVnVHZ0pWVXlnQVAB"),
+    ("Ars Technica",         "https://feeds.arstechnica.com/arstechnica/index"),        # replaces Google News Tech (404)
     ("NPR Business",         "https://feeds.npr.org/1006/rss.xml"),
     ("Economist Finance",    "https://www.economist.com/finance-and-economics/rss.xml"),
     # no r/wallstreetbets because it's just memes and pump talk, not actual news. also reddit has no rss feed, so there's that
@@ -318,8 +318,8 @@ YFINANCE_BACKOFF_BASE  = 1.0     # base seconds for exponential backoff. 1s → 
 #     Applied as a multiplier to relevance scores.
 
 SOURCE_WEIGHTS: dict[str, float] = {
-    "Reuters Business":     1.35,
-    "Reuters Tech":         1.35,
+    "Guardian Business":    1.20,
+    "TechCrunch":           1.15,
     "CNBC Top News":        1.20,
     "BBC Business":         1.20,
     "MarketWatch":          1.20,
@@ -329,7 +329,7 @@ SOURCE_WEIGHTS: dict[str, float] = {
     "NPR Business":         1.00,
     "Al Jazeera":           0.90,
     "Google News Business": 0.90,
-    "Google News Tech":     0.90,
+    "Ars Technica":         1.10,
 }
 
 #  10. MOMENTUM SETTINGS

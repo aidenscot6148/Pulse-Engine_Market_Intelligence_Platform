@@ -80,13 +80,17 @@ def evaluate_signal_accuracy(
         # Skip pairs separated by more than 4 calendar days (weekend + holiday).
         # A larger gap means the "next-day" prediction spans multiple sessions,
         # which inflates or deflates apparent accuracy.
+        curr_date_str = curr.get("date")
+        nxt_date_str  = nxt.get("date")
+        if not curr_date_str or not nxt_date_str:
+            continue
         try:
-            curr_date = dt.date.fromisoformat(curr.get("date", ""))
-            nxt_date  = dt.date.fromisoformat(nxt.get("date", ""))
+            curr_date = dt.date.fromisoformat(curr_date_str)
+            nxt_date  = dt.date.fromisoformat(nxt_date_str)
             if (nxt_date - curr_date).days > 4:
                 continue
         except (ValueError, TypeError):
-            pass
+            continue  # malformed date — skip the pair entirely, don't evaluate it
 
         sig_score  = curr.get("signal_score")
         curr_price = curr.get("price")

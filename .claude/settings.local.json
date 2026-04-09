@@ -4,7 +4,13 @@
       "Bash(python3 -c \"import sys; sys.path.insert\\(0, '/c/Users/Bhargavaram/OneDrive/Desktop/coding_stuff/Pycharm_main_file/python_project_files/pulse_engine_1'\\); from config.settings import SCAN_INTERVAL_MINUTES, STORAGE_DIR, PRICE_CACHE_TTL, NEWS_CACHE_TTL; print\\('Config import OK'\\)\")",
       "Read(//tmp/**)",
       "Bash(sed -n '98p' /c/Users/Bhargavaram/OneDrive/Desktop/coding_stuff/Pycharm_main_file/python_project_files/pulse_engine_1/dashboard/components.py)",
-      "Bash(sed -n '185p' /c/Users/Bhargavaram/OneDrive/Desktop/coding_stuff/Pycharm_main_file/python_project_files/pulse_engine_1/dashboard/components.py)"
+      "Bash(sed -n '185p' /c/Users/Bhargavaram/OneDrive/Desktop/coding_stuff/Pycharm_main_file/python_project_files/pulse_engine_1/dashboard/components.py)",
+      "Bash(pip install:*)",
+      "Bash(python -c \"lines=[l for l in open\\('requirements.txt'\\) if not l.startswith\\('numpy'\\)]; open\\('/tmp/req_no_numpy.txt','w'\\).writelines\\(lines\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(python -c \"import streamlit; import inspect; print\\(inspect.signature\\(streamlit.plotly_chart\\)\\)\")",
+      "Bash(python -c \"import streamlit.elements.plotly_chart as pc; import inspect; src = inspect.getsource\\(pc\\); print\\(src[:3000]\\)\")",
+      "Bash(python:*)"
     ]
   }
 }

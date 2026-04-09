@@ -1,6 +1,6 @@
 # PulseEngine                        [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/M4M11X86KI)
 
-[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![pandas](https://img.shields.io/badge/pandas-2.0%2B-150458?style=flat-square&logo=pandas&logoColor=white)](https://pandas.pydata.org/)
@@ -135,7 +135,8 @@ git clone https://github.com/Codex-Crusader/le_Market_Intelligence_Platform.git
 cd le_Market_Intelligence_Platform
 
 # 2. Create and activate a virtual environment
-py -3.11 -m venv .venv
+# Python 3.11–3.14 are all supported
+python -m venv .venv
 # Windows
 .venv\Scripts\activate
 # macOS / Linux
@@ -170,7 +171,7 @@ Dashboard available at `http://localhost:8501`.
 
 ### Requirements
 
-- Python 3.11+ (recommended)
+- Python 3.11–3.14 (all supported; `pip install -r requirements.txt` works out of the box on all four versions)
 - Internet connection (Yahoo Finance and RSS feeds)
 
 ### Dependencies

@@ -21,6 +21,7 @@ import re
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+from urllib.parse import urlparse
 
 import feedparser
 
@@ -47,6 +48,16 @@ def fetch_news_articles() -> list[dict]:
     cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=NEWS_MAX_AGE_HOURS)
 
     def _fetch_feed(source_name: str, feed_url: str) -> list[dict]:
+        # Validate URL scheme — only http/https permitted (blocks file://, ftp://, internal addrs)
+        try:
+            _scheme = urlparse(feed_url).scheme
+            if _scheme not in ("http", "https"):
+                log.warning("RSS feed %s rejected: unsupported scheme %r", source_name, _scheme)
+                return []
+        except Exception as _url_exc:
+            log.warning("RSS feed %s rejected: invalid URL — %s", source_name, _url_exc)
+            return []
+
         feed_articles: list[dict] = []
         try:
             request = urllib.request.Request(
@@ -59,7 +70,8 @@ def fetch_news_articles() -> list[dict]:
                 pub = _parse_pub_date(entry)
                 if pub and pub < cutoff:
                     continue
-                title   = entry.get("title", "").strip()
+                # Cap title length to prevent memory exhaustion from malformed feeds
+                title   = entry.get("title", "").strip()[:500]
                 summary = _strip_html(entry.get("summary", ""))
                 if not title:
                     continue
@@ -71,7 +83,7 @@ def fetch_news_articles() -> list[dict]:
                     "published": pub,
                 })
         except Exception as exc:
-            log.warning("RSS error (%s): %s", source_name, exc)
+            log.warning("RSS error (%s): %s", source_name, str(exc)[:200])
         return feed_articles
 
     articles: list[dict] = []
@@ -210,6 +222,10 @@ def _parse_pub_date(entry) -> Optional[dt.datetime]:
     for attr in ("published_parsed", "updated_parsed"):
         parsed = getattr(entry, attr, None)
         if parsed:
+            # feedparser guarantees a time.struct_time (9-tuple), but malformed feeds can
+            # return other types — validate before unpacking to avoid silent wrong results
+            if not isinstance(parsed, (tuple, list)) or len(parsed) < 6:
+                continue
             try:
                 return dt.datetime(*parsed[:6], tzinfo=dt.timezone.utc)
             except (ValueError, OverflowError, TypeError):

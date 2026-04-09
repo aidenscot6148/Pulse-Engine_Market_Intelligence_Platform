@@ -103,7 +103,8 @@ git clone https://github.com/Codex-Crusader/le_Market_Intelligence_Platform.git
 cd le_Market_Intelligence_Platform
 
 # 2. Create a virtual environment
-py -3.11 -m venv .venv
+# Python 3.11–3.14 are all supported
+python -m venv .venv
 # Windows
 .venv\Scripts\activate
 # macOS / Linux

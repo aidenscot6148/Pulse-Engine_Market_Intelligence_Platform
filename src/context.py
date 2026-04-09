@@ -9,6 +9,17 @@ Pipeline role (step 6 of the full engine):
   - analyse_market_context : fetch peer and benchmark prices, classify the move
   - find_category          : resolve an asset name to its config category
   - _find_ticker           : internal helper to look up a ticker from TRACKED_ASSETS
+
+Price cache
+-----------
+analyse_market_context accepts an optional ``price_cache`` mapping of
+``{ticker: change_1d}``.  When a peer or benchmark ticker is present in the
+cache the network fetch is skipped entirely — this eliminates the ~50-80
+redundant yfinance calls that occur during a full-market batch scan where the
+same tickers appear as peers for multiple assets.
+
+Pass ``price_cache=None`` (the default) to retain the original fetch-on-demand
+behaviour (used by the dashboard for on-demand single-asset analysis).
 """
 
 from __future__ import annotations
@@ -33,10 +44,20 @@ def analyse_market_context(
     asset_name: str,
     category: str,
     asset_change: Optional[float],
+    price_cache: Optional[dict[str, float]] = None,
 ) -> dict:
     """
     Compare the asset's move against sector peers and the broad market
     benchmark to determine whether the move is asset-specific or systemic.
+
+    Parameters
+    ----------
+    asset_name   : name of the asset being analysed
+    category     : asset class (used to look up the benchmark ticker)
+    asset_change : today's price change % for the asset
+    price_cache  : optional {ticker: change_1d} dict built before the scan loop.
+                   When a ticker is present in the cache its change_1d is used
+                   directly and no network call is made.  Pass None to always fetch.
 
     Returns a dict with keys:
       peer_moves        — {peer_name: change_1d}
@@ -69,15 +90,18 @@ def analyse_market_context(
         peer_ticker = _find_ticker(peer_name)
         if not peer_ticker:
             return peer_name, None, None
+        # Use pre-built cache when available — skips a network round-trip
+        if price_cache is not None and peer_ticker in price_cache:
+            return peer_name, price_cache[peer_ticker], None
         try:
             peer_hist = fetch_price_history(peer_ticker, days=5)
-        except DataFetchError as exc:
+        except DataFetchError as _peer_exc:
             return peer_name, None, {
                 "type": "data_fetch_error",
                 "stage": "peer_price_history",
                 "peer": peer_name,
                 "ticker": peer_ticker,
-                "message": str(exc),
+                "message": str(_peer_exc),
             }
         if peer_hist is None or peer_hist.empty:
             return peer_name, None, None
@@ -104,26 +128,30 @@ def analyse_market_context(
     # ── Benchmark comparison ─────────────────────────────────────────────────
     bench_ticker = MARKET_BENCHMARK.get(category)
     if bench_ticker:
-        try:
-            hist = fetch_price_history(bench_ticker, days=5)
-        except DataFetchError as exc:
-            context["benchmark_error"] = {
-                "type": "data_fetch_error",
-                "stage": "benchmark_price_history",
-                "ticker": bench_ticker,
-                "message": str(exc),
-            }
-            hist = None
-        if hist is not None and not hist.empty:
-            bm        = compute_price_metrics(hist)
-            bench_chg = bm.get("change_1d")
-            context["benchmark_change"] = bench_chg
-            if (
-                bench_chg is not None
-                and bench_chg * direction > 0
-                and abs(bench_chg) > 0.5
-            ):
-                context["is_market_wide"] = True
+        bench_chg: Optional[float] = None
+        if price_cache is not None and bench_ticker in price_cache:
+            bench_chg = price_cache[bench_ticker]
+        else:
+            try:
+                hist = fetch_price_history(bench_ticker, days=5)
+            except DataFetchError as exc:
+                context["benchmark_error"] = {
+                    "type": "data_fetch_error",
+                    "stage": "benchmark_price_history",
+                    "ticker": bench_ticker,
+                    "message": str(exc),
+                }
+                hist = None
+            if hist is not None and not hist.empty:
+                bm        = compute_price_metrics(hist)
+                bench_chg = bm.get("change_1d")
+        context["benchmark_change"] = bench_chg
+        if (
+            bench_chg is not None
+            and bench_chg * direction > 0
+            and abs(bench_chg) > 0.5
+        ):
+            context["is_market_wide"] = True
 
     context["is_asset_specific"] = (
         not context["is_sector_wide"] and not context["is_market_wide"]

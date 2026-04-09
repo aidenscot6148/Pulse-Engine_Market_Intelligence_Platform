@@ -20,17 +20,19 @@ Structure of the scan summary (market_data/_scan_summary.json.gz):
       "results": {
         "Commodities": {
           "Gold": {
-            "ticker":       "GC=F",
-            "signal_score": 4.5,
-            "signal_label": "Bullish",
-            "price":        2150.43,
-            "change_1d":    1.25,
-            "change_7d":    3.45,
-            "trend":        "uptrend",
-            "rsi":          65.3,
-            "roc_10d":      3.45,
-            "confidence":   "high",
-            "verdict":      "Gold is up 1.25% today ..."
+            "ticker":          "GC=F",
+            "signal_score":    4.5,
+            "signal_label":    "Bullish",
+            "price":           2150.43,
+            "change_1d":       1.25,
+            "change_7d":       3.45,
+            "trend":           "uptrend",
+            "rsi":             65.3,
+            "roc_10d":         3.45,
+            "confidence":      "high",
+            "verdict":         "Gold is up 1.25% today ...",
+            "is_market_wide":  false,
+            "is_sector_wide":  true
           },
           ...
         },
@@ -38,6 +40,14 @@ Structure of the scan summary (market_data/_scan_summary.json.gz):
         ...
       }
     }
+
+Responsibility boundary:
+  run_scan()       (this module) — batch pipeline; persists .json.gz snapshots
+                                   and the scan summary; called from the CLI or
+                                   a scheduled job.
+  run_full_scan()  (src/engine) — dashboard background daemon; returns rich
+                                   in-memory objects (DataFrames, article lists);
+                                   does NOT write any files.
 """
 
 from __future__ import annotations
@@ -51,18 +61,18 @@ import re
 from pathlib import Path
 
 from config.settings import TRACKED_ASSETS, STORAGE_DIR
-from app.analysis import fetch_news_articles, analyse_asset
+from app.analysis import fetch_news_articles, analyse_asset, fetch_all_metrics_parallel
 
 log = logging.getLogger(__name__)
 
 _SUMMARY_FILE = Path(STORAGE_DIR) / "_scan_summary.json.gz"
 
 
-def _snake_case(name: str) -> str:
-    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+def _snake_case(s: str) -> str:
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", s).lower()
 
 
-def _build_error_payload(stage: str, exc: Exception, **context: object) -> dict:
+def _build_error_payload(stage: str, exc: Exception, **context) -> dict:
     payload = {
         "type": _snake_case(exc.__class__.__name__),
         "exception": exc.__class__.__name__,
@@ -91,6 +101,20 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
     articles = fetch_news_articles()
     log.info("Fetched %d deduplicated articles for correlation.", len(articles))
 
+    # Pre-fetch all asset prices in parallel and build a {ticker: change_1d} cache.
+    # analyse_market_context uses this to resolve peer and benchmark lookups without
+    # making additional network calls — eliminates ~50-80 redundant yfinance requests
+    # that would otherwise occur across the 24-asset scan loop.
+    _all_price_data = fetch_all_metrics_parallel(days=5)
+    price_cache: dict[str, float] = {}
+    for _cat, _cat_data in _all_price_data.items():
+        for _name, _data in _cat_data.items():
+            _ticker = TRACKED_ASSETS.get(_cat, {}).get(_name)
+            _chg = _data.get("metrics", {}).get("change_1d")
+            if _ticker and _chg is not None:
+                price_cache[_ticker] = _chg
+    log.info("Price cache built: %d tickers pre-fetched for context analysis.", len(price_cache))
+
     total   = sum(len(v) for v in TRACKED_ASSETS.values())
     done    = 0
     errors: list[dict] = []  # the hall of shame
@@ -105,14 +129,16 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
                 # crunch crunch crunch
                 r = analyse_asset(
                     asset_name, ticker, category, articles,
-                    with_market_ctx=False,   # keep scan fast; context optional
+                    with_market_ctx=True,    # context is free — peer data is cached
                     save=True,               # scan pipeline is the sole snapshot writer
+                    price_cache=price_cache, # avoids redundant peer/benchmark fetches
                 )
                 sig     = r["signal"]
                 metrics = r["metrics"]
                 mom     = r["momentum"]
                 expl    = r["explanation"]
 
+                ctx = r.get("market_ctx") or {}
                 entry = {
                     "ticker":          ticker,
                     "signal_score":    sig.get("score"),
@@ -129,6 +155,8 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
                     "momentum_accel":  mom.get("momentum_accel"),
                     "confidence":      expl.get("confidence"),
                     "verdict":         expl.get("verdict", ""),
+                    "is_market_wide":  ctx.get("is_market_wide", False),
+                    "is_sector_wide":  ctx.get("is_sector_wide", False),
                 }
                 error = r.get("error")
                 if error:
@@ -300,11 +328,20 @@ def load_last_scan_summary() -> dict:
 
 # ── Internal ─────────────────────────────────────────────────────
 
+def _json_default(obj: object) -> object:
+    """Explicit JSON serialiser — converts known safe types, logs and stringifies anything else."""
+    if isinstance(obj, (dt.date, dt.datetime)):
+        return obj.isoformat()
+    # Anything else (DataFrames, Exceptions, etc.) would indicate a bug — log it so it's visible
+    log.warning("Unexpected type in scan summary: %s — converting to string", type(obj).__name__)
+    return str(obj)
+
+
 def _save_summary(payload: dict) -> None:
     """Write hierarchical scan summary to compressed JSON."""
     try:
         _SUMMARY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        raw = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+        raw = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
         with gzip.open(_SUMMARY_FILE, "wb", compresslevel=6) as fh:
             fh.write(raw)
         log.info("Scan summary saved: %s", _SUMMARY_FILE)

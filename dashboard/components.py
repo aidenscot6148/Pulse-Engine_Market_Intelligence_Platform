@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import html as _html
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -245,7 +247,7 @@ def render_why_box(snap: dict) -> None:
         st.markdown(
             f'<div class="why-box">'
             f'<div class="why-label">Why it matters</div>'
-            f'{verdict}'
+            f'{_html.escape(verdict)}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -326,22 +328,33 @@ def render_article(item: dict) -> None:
         )
         events_html = f'<br><span style="font-size:0.80rem;color:#635a48">{tags}</span>'
 
-    raw_summary = item.get("summary", "")
-    summary     = raw_summary[:220]
+    raw_summary = item.get("summary", "") if isinstance(item.get("summary"), str) else ""
+    summary     = _html.escape(raw_summary[:220])
     if len(raw_summary) > 220:
         summary += " ..."
 
+    # Validate link — only http/https allowed; anything else (javascript:, data:, etc.) is dropped
+    raw_link = item.get("link", "")
+    try:
+        _parsed_link = urlparse(raw_link)
+        safe_link = _html.escape(raw_link, quote=True) if _parsed_link.scheme in ("http", "https") else "#"
+    except ValueError:
+        safe_link = "#"
+
+    safe_title  = _html.escape(item.get("title", ""))
+    safe_source = _html.escape(item.get("source", ""))
+
     st.markdown(
         f'<div class="news-row">'
-        f'<strong style="color:#e4d9c4;font-family:var(--font-display)">{item["title"]}</strong><br>'
+        f'<strong style="color:#e4d9c4;font-family:var(--font-display)">{safe_title}</strong><br>'
         f'<span class="news-meta">'
-        f'{item["source"]} (weight {src_w:.2f}) &middot; {pub} &middot; '
+        f'{safe_source} (weight {src_w:.2f}) &middot; {pub} &middot; '
         f'<span style="color:{sent_color}">{sent_word} ({sent:+.2f})</span>'
         f' &middot; Relevance: {rel_html}'
         f'</span>'
         f'{events_html}'
         f'<br><span style="color:#9e9078;font-size:0.87rem;font-style:italic">{summary}</span>'
-        f'<br><a href="{item["link"]}" target="_blank" '
+        f'<br><a href="{safe_link}" target="_blank" '
         f'style="color:#8a7040;font-size:0.82rem">Read full article →</a>'
         f'</div>',
         unsafe_allow_html=True,
@@ -504,7 +517,7 @@ def _render_price_chart(history: pd.DataFrame) -> None:
         hovermode="x unified",
         font=dict(family="Georgia, 'Times New Roman', serif"),
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, config={"responsive": True})
 
 
 def _render_volume_chart(history: pd.DataFrame) -> None:
@@ -529,17 +542,24 @@ def _render_volume_chart(history: pd.DataFrame) -> None:
             yaxis=dict(showgrid=False, color="#635a48"),
             font=dict(family="Georgia, 'Times New Roman', serif"),
         )
-        st.plotly_chart(vfig, width="stretch")
+        st.plotly_chart(vfig, config={"responsive": True})
 
 
 def _render_signal_components(live_signal: dict) -> None:
     with st.expander("Signal component breakdown"):
         comps = live_signal.get("components", {})
         if not comps:
+            st.info("No component data available.")
             return
         comp_names  = list(comps.keys())
         comp_values = [comps[k] for k in comp_names]
         colors      = ["#4a7a52" if v >= 0 else "#7a3a3a" for v in comp_values]
+
+        # Dynamic y-axis range so clipped bars (e.g. crypto momentum at 1.8× weight)
+        # are always fully visible with room for the outside text labels.
+        max_abs = max((abs(v) for v in comp_values), default=1.0)
+        y_range = max(round(max_abs * 1.30 + 0.2, 1), 1.5)
+
         cfig = go.Figure(go.Bar(
             x=comp_names,
             y=comp_values,
@@ -557,12 +577,12 @@ def _render_signal_components(live_signal: dict) -> None:
                 color="#635a48",
                 showgrid=True,
                 gridcolor="rgba(82,72,64,0.2)",
-                range=[-3.5, 3.5],
+                range=[-y_range, y_range],
             ),
             font=dict(family="Georgia, 'Times New Roman', serif", color="#9e9078"),
         )
         cfig.add_hline(y=0, line_color="#524840", line_width=1)
-        st.plotly_chart(cfig, width="stretch")
+        st.plotly_chart(cfig, config={"responsive": True})
         if live_signal.get("category"):
             st.caption(
                 f"Per-class weights applied for {live_signal['category']}. "
@@ -723,7 +743,12 @@ def render_live_analysis(
     _render_backtest_section(selected_asset)
     _render_historical_context(selected_asset, snap)
 
-    with st.expander("Full Analysis", expanded=is_significant):
+    # Auto-expand when: snapshot shows a significant price move (≥2%) OR
+    # the live signal is at least Bullish/Bearish (score ≥ 3 or ≤ -3).
+    # Using OR means categories with no scan data (non-commodity first run)
+    # still get the expander open when the live signal is meaningful.
+    live_score = abs(live_signal.get("score") or 0)
+    with st.expander("Full Analysis", expanded=is_significant or live_score >= 3.0):
         st.markdown(live_explanation["detail"])
 
 
@@ -771,7 +796,7 @@ def render_heatmap(summary: dict, summary_date: str) -> None:
         yaxis=dict(color="#9e9078", showgrid=False),
         font=dict(size=10, color="#9e9078", family="Georgia, 'Times New Roman', serif"),
     )
-    st.plotly_chart(hm_fig, width="stretch")
+    st.plotly_chart(hm_fig, config={"responsive": True})
 
     caption = "Clipped at ±5%. Cells with no data show 0%."
     if summary_date:
