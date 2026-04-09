@@ -157,12 +157,13 @@ if (
     and not st.session_state.get("_scan_rerun_done", False)
 ):
     st.session_state["_scan_rerun_done"] = True
-    cached_scan_summary.clear()
+    st.session_state["_scan_refresh_epoch"] = int(st.session_state.get("_scan_refresh_epoch", 0)) + 1
     st.rerun()
 
 
 # Load scan summary once per run — needed for scan status display and main content.
-_summary         = cached_scan_summary()
+_scan_refresh_epoch = int(st.session_state.get("_scan_refresh_epoch", 0))
+_summary         = cached_scan_summary(_scan_refresh_epoch)
 _summary_results = _summary.get("results", {})
 _summary_date    = _summary.get("scan_date", "")
 
@@ -201,8 +202,7 @@ st.sidebar.caption(f"Sentiment engine: {'VADER' if VADER_AVAILABLE else 'Keyword
 st.sidebar.caption(f"Last refresh: {dt.datetime.now().strftime('%H:%M:%S')}")
 
 if st.sidebar.button("Refresh Data"):
-    cached_scan_summary.clear()
-    st.cache_data.clear()
+    st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
     st.session_state.pop("_stale_refresh_triggered", None)
     st.rerun()
 
@@ -220,11 +220,13 @@ if st.sidebar.button(
     if not _scan_state["running"] and _scan_state["lock"].acquire(blocking=False):
         _scan_state["last_started"] = time.time()
         _scan_state["running"]      = True
+        st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
         threading.Thread(
             target=_run_background_scan,
             daemon=True,
             name="full-market-scan-manual",
         ).start()
+        st.session_state["_scan_refresh_epoch"] = int(st.session_state.get("_scan_refresh_epoch", 0)) + 1
     st.rerun()
 
 # Top movers

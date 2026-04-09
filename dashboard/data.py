@@ -48,8 +48,9 @@ def cached_history(symbol: str) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=3600)
-def cached_scan_summary() -> dict:
+def cached_scan_summary(cache_token: int = 0) -> dict:
     """Load the latest scan summary from disk — no network calls."""
+    _ = cache_token  # cache-buster only; kept out of the return value on purpose
     return load_last_scan_summary()
 
 
