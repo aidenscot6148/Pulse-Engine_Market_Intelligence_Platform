@@ -253,12 +253,12 @@ st.sidebar.markdown(
 _stale = is_data_stale(_summary)
 if _stale and not st.session_state.get("_stale_refresh_triggered", False):
     st.session_state["_stale_refresh_triggered"] = True
-    cached_scan_summary.clear()
+    st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
 
 st.markdown(f"# {selected_asset}")
 st.caption(f"{selected_category}  ·  `{ticker}`  ·  last 30 days")
 
-ui.render_data_status_banner(_get_scan_state(), _stale, _summary)
+ui.render_data_status_banner(_scan_state, _stale, _summary)
 
 snap           = _summary_results.get(selected_category, {}).get(selected_asset, {})
 chg_1d         = snap.get("change_1d")
