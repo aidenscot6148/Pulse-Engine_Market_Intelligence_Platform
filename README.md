@@ -32,6 +32,7 @@ All data is sourced from free, publicly available feeds. No proprietary APIs, no
 - [Architecture](#architecture)
 - [Asset Coverage](#asset-coverage)
 - [Quick Start](#quick-start)
+- [Quick Start (Docker)](#quick-start-docker)
 - [Installation](#installation)
 - [Running the Dashboard](#running-the-dashboard)
 - [Running a Full Scan](#running-a-full-scan)
