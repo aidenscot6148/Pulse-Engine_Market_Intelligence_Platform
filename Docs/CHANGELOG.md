@@ -47,7 +47,7 @@ All notable changes to this project will be documented in this file.
   - `favicon.ico` → `assets/icons/favicon.ico`
   - `pulseengine_logo.png` → `assets/logo/pulseengine_logo.png`
 - Dashboard entry point changed from `streamlit run dashboard.py` to `streamlit run dashboard/main.py`
-- Scan CLI entry point changed from `python scan.py` to `python app/scan.py`
+- Scan CLI entry point changed from `python scan.py` to `python -m app.scan`
 
 ### Fixed
 - Added `sys.path.insert(0, ...)` at the top of `dashboard/main.py` to ensure the project root is on `sys.path` when Streamlit is launched, resolving `ModuleNotFoundError: No module named 'config'` that occurred because Streamlit adds the script directory (`dashboard/`) to `sys.path` rather than the project root

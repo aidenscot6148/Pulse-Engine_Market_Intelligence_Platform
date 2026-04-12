@@ -225,13 +225,13 @@ The scan pipeline can be executed independently of the dashboard:
 
 ```bash
 # Full verbose scan — saves snapshots and summary
-python app/scan.py
+python -m app.scan
 
 # Suppress per-asset log lines
-python app/scan.py --quiet
+python -m app.scan --quiet
 
 # Validate pipeline without writing any files
-python app/scan.py --dry-run
+python -m app.scan --dry-run
 ```
 
 Output is written to:

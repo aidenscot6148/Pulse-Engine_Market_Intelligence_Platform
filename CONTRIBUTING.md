@@ -118,7 +118,7 @@ pip install -r requirements-dev.txt
 pytest
 
 # 5. Verify the pipeline works
-python app/scan.py --dry-run
+python -m app.scan --dry-run
 
 # 5. Run the dashboard
 streamlit run dashboard/main.py
@@ -175,7 +175,7 @@ In addition to the automated tests, verify the following manually before submitt
 
 1. **Dry run passes without errors**
    ```bash
-   python app/scan.py --dry-run
+  python -m app.scan --dry-run
    ```
 
 2. **Dashboard loads without warnings or errors in the terminal**
