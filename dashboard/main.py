@@ -210,7 +210,7 @@ st.sidebar.caption(f"Sentiment engine: {'VADER' if VADER_AVAILABLE else 'Keyword
 st.sidebar.caption(f"Last refresh: {dt.datetime.now().strftime('%H:%M:%S')}")
 
 if st.sidebar.button("Refresh Data"):
-    st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
+    st.session_state["_scan_refresh_epoch"] = st.session_state.get("_scan_refresh_epoch", 0) + 1
     st.session_state.pop("_stale_refresh_triggered", None)
     st.rerun()
 
@@ -228,7 +228,7 @@ if st.sidebar.button(
     if not _scan_state["running"] and _scan_state["lock"].acquire(blocking=False):
         _scan_state["last_started"] = time.time()
         _scan_state["running"]      = True
-        st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
+        st.session_state["_scan_refresh_epoch"] = st.session_state.get("_scan_refresh_epoch", 0) + 1
         threading.Thread(
             target=_run_background_scan,
             daemon=True,
@@ -263,7 +263,7 @@ if _stale:
     st.info("Data is stale. Refresh recommended.")
 
     if st.button("Refresh now"):
-        st.session_state["_scan_refresh_epoch"] = _scan_refresh_epoch + 1
+        st.session_state["_scan_refresh_epoch"] = st.session_state.get("_scan_refresh_epoch", 0) + 1
         st.session_state["_stale_refresh_triggered"] = True
         st.rerun()
   
