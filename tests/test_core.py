@@ -33,8 +33,10 @@ from src.price import fetch_price_history
 # Canonical imports — new code should use these
 from src.price import _compute_rsi as _src_rsi, _compute_roc as _src_roc
 from src.sentiment import score_sentiment as src_score_sentiment
-from src.news import deduplicate_articles as src_dedup
-from src.signals import compute_signal_score as src_signal_score
+import datetime as dt
+
+from src.news import deduplicate_articles as src_dedup, generate_keywords
+from src.signals import compute_signal_score as src_signal_score, correlate_news
 
 
 # ── RSI ───────────────────────────────────────────────────────────────────────
@@ -157,6 +159,96 @@ def test_fetch_price_history_raises_on_fetch_failure(mocker):
 
     with pytest.raises(DataFetchError):
         fetch_price_history("TEST", days=1)
+
+
+# ── generate_keywords ─────────────────────────────────────────────────────────
+
+def test_generate_keywords_known_ticker(mocker):
+    """Known ticker returns symbol, company name tokens, and officer surnames — not sector/industry."""
+    mock_info = {
+        "longName": "NVIDIA Corporation",
+        "shortName": "NVIDIA",
+        "symbol": "NVDA",
+        "industry": "Semiconductors",
+        "sector": "Technology",
+        "companyOfficers": [
+            {"name": "Jensen Huang"},
+            {"name": "Colette Kress"},
+        ],
+    }
+    ticker_mock = mocker.Mock()
+    ticker_mock.info = mock_info
+    mocker.patch("src.news.yf.Ticker", return_value=ticker_mock)
+
+    result = generate_keywords("NVDA")
+    assert "NVDA" in result
+    assert "NVIDIA" in result
+    assert "Huang" in result                  # executive surname included
+    assert "Semiconductors" not in result     # industry dropped — too broad for keyword matching
+    assert "Technology" not in result         # sector dropped — too broad for keyword matching
+    assert all(len(kw) >= 3 for kw in result)
+    assert len(result) == len({kw.lower() for kw in result}), "result must be deduplicated"
+
+
+def test_generate_keywords_unknown_ticker(mocker):
+    """Unknown ticker (empty info) should return [ticker] without raising."""
+    ticker_mock = mocker.Mock()
+    ticker_mock.info = {}
+    mocker.patch("src.news.yf.Ticker", return_value=ticker_mock)
+
+    result = generate_keywords("NOTREAL")
+    assert result == ["NOTREAL"]
+
+
+def test_generate_keywords_network_failure(mocker):
+    """Network failure should return [ticker] without raising."""
+    mocker.patch("src.news.yf.Ticker", side_effect=Exception("connection refused"))
+
+    result = generate_keywords("NVDA")
+    assert result == ["NVDA"]
+
+
+def test_generate_keywords_timeout(mocker):
+    """When the fetch thread does not finish within REQUEST_TIMEOUT, return [ticker]."""
+    thread_mock = mocker.MagicMock()
+    thread_mock.is_alive.return_value = True   # simulates a hung thread
+    mocker.patch("src.news.threading.Thread", return_value=thread_mock)
+
+    result = generate_keywords("NVDA")
+    assert result == ["NVDA"]
+    thread_mock.start.assert_called_once()
+    thread_mock.join.assert_called_once()
+
+
+# ── correlate_news word-boundary matching ─────────────────────────────────────
+
+def test_correlate_news_no_substring_false_positive():
+    """'gold' keyword must not match articles whose only hit is a substring like 'goldman'."""
+    now = dt.datetime.now(dt.timezone.utc)
+    goldman_article = {
+        "title": "goldman sachs raises forecast for major banks",
+        "summary": "Goldman Sachs analysts upgraded their outlook for the banking sector.",
+        "link": "https://example.com/gs",
+        "source": "Reuters Business",
+        "published": now - dt.timedelta(hours=1),
+    }
+    gold_article = {
+        "title": "gold prices hit record as safe haven demand surges",
+        "summary": "Bullion climbs on central bank buying.",
+        "link": "https://example.com/gold",
+        "source": "Reuters Business",
+        "published": now - dt.timedelta(hours=1),
+    }
+
+    results = correlate_news("Gold", [goldman_article, gold_article])
+    matched_titles = {a["title"] for a in results}
+
+    assert goldman_article["title"] not in matched_titles, (
+        "Goldman Sachs article must not match Gold — 'gold' is a substring of 'goldman'"
+    )
+    assert gold_article["title"] in matched_titles, (
+        "Gold article must match Gold"
+    )
 
 
 def test_fetch_news_articles_uses_explicit_timeout(mocker):

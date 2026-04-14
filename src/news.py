@@ -8,6 +8,7 @@ Pipeline role (steps 2 and 2.5 of the full engine):
   - deduplicate_articles  : remove near-duplicates via Jaccard title similarity
   - cluster_articles      : group articles by dominant detected event type
   - get_display_clusters  : filtered, summarised cluster view for UI consumption
+  - generate_keywords     : auto-build a keyword list for any ticker from Yahoo Finance metadata
 
 This module does NOT score sentiment or match articles to assets — those
 responsibilities belong to src/sentiment.py and src/signals.py respectively.
@@ -18,12 +19,14 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
+import threading
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from urllib.parse import urlparse
 
 import feedparser
+import yfinance as yf
 
 from config.settings import (
     DEDUP_SIMILARITY_THRESHOLD,
@@ -214,6 +217,83 @@ def get_display_clusters(
         "suppressed_count": suppressed,
         "total_shown":     len(shown),
     }
+
+
+# ── Keyword generation ────────────────────────────────────────────────────────
+
+_CORP_SUFFIXES: frozenset[str] = frozenset({
+    "inc", "corp", "corporation", "ltd", "limited", "plc", "llc", "lp",
+    "group", "holdings", "co", "company", "technologies", "technology",
+    "systems", "services", "solutions", "international", "global",
+})
+
+
+def generate_keywords(ticker: str) -> list[str]:
+    """
+    Build a keyword list for news correlation from Yahoo Finance metadata.
+    Returns a deduplicated list of relevant search terms for the given ticker.
+    Falls back to [ticker] if metadata fetch fails.
+    """
+    ticker = ticker.upper().strip()
+
+    _result: list = [None]
+    _exc: list = [None]
+
+    def _fetch() -> None:
+        try:
+            _result[0] = yf.Ticker(ticker).info
+        except Exception as exc:
+            _exc[0] = exc
+
+    thread = threading.Thread(target=_fetch, daemon=True)
+    thread.start()
+    thread.join(timeout=REQUEST_TIMEOUT)
+
+    if thread.is_alive():
+        log.warning("generate_keywords(%r): metadata fetch timed out", ticker)
+        return [ticker]
+
+    if _exc[0] is not None:
+        log.warning("generate_keywords(%r) failed: %s", ticker, _exc[0])
+        return [ticker]
+
+    info = _result[0]
+
+    if not info or not info.get("longName"):
+        return [ticker]
+
+    candidates: list[str] = [ticker]
+
+    for field in ("longName", "shortName"):
+        val = (info.get(field) or "").strip()
+        if not val:
+            continue
+        candidates.append(val)
+        for token in re.split(r"[\s,./&]+", val):
+            clean = re.sub(r"[^a-zA-Z0-9]", "", token)
+            if clean and clean.lower() not in _CORP_SUFFIXES:
+                candidates.append(clean)
+
+    for officer in (info.get("companyOfficers") or [])[:5]:
+        name = (officer.get("name") or "").strip()
+        if not name:
+            continue
+        parts = name.split()
+        if parts:
+            surname = re.sub(r"[^a-zA-Z]", "", parts[-1])
+            if surname:
+                candidates.append(surname)
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for kw in candidates:
+        kw = kw.strip()
+        key = kw.lower()
+        if len(kw) >= 3 and key not in seen:
+            seen.add(key)
+            result.append(kw)
+
+    return result if result else [ticker]
 
 
 # ── Private helpers ───────────────────────────────────────────────────────────
