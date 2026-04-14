@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] — v0.3 development
 
+- No entries yet.
+
+---
+
+## [0.2.3] - 2026-04-14
+### "Ticker Keyword Intelligence + Correlation Reliability"
+
 ### Added
 - `generate_keywords(ticker)` in `src/news.py` — auto-builds a keyword list for any ticker from Yahoo Finance metadata (company name tokens, executive surnames). Uses a daemon thread bounded by `REQUEST_TIMEOUT` so a hung network call never blocks the pipeline. Falls back to `[ticker]` on timeout, network failure, or unknown ticker. Part of #35 (v0.3 arbitrary ticker support).
 - `Docs/CONTRIBUTORS.md` — acknowledgement list for all project contributors.
