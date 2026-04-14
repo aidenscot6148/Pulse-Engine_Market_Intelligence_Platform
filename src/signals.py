@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import re
 from typing import Optional
 
 from config.settings import (
@@ -27,6 +28,21 @@ from config.settings import (
 from src.sentiment import score_sentiment
 
 log = logging.getLogger(__name__)
+
+# Compiled keyword patterns, built once and reused across all correlate_news calls.
+# Word boundaries (\b) on each alphanumeric end prevent substring false-positives
+# (e.g. "gold" matching "goldman", "oil" matching "broil").
+_KW_PATTERN_CACHE: dict[str, re.Pattern] = {}
+
+
+def _kw_re(kw: str) -> re.Pattern:
+    """Return a compiled regex that matches *kw* as a whole token in lowercase text."""
+    if kw not in _KW_PATTERN_CACHE:
+        escaped = re.escape(kw)
+        prefix  = r'\b'
+        suffix  = r'\b' if kw[-1].isalnum() else ''
+        _KW_PATTERN_CACHE[kw] = re.compile(prefix + escaped + suffix)
+    return _KW_PATTERN_CACHE[kw]
 
 
 # ── News-asset correlation ────────────────────────────────────────────────────
@@ -47,7 +63,7 @@ def correlate_news(asset_name: str, articles: list[dict]) -> list[dict]:
     matched: list[dict] = []
     for article in articles:
         blob  = (article["title"] + " " + article["summary"]).lower()
-        score = sum(w for kw, w in kw_pairs if kw in blob)
+        score = sum(w for kw, w in kw_pairs if _kw_re(kw).search(blob))
 
         if score <= 0:
             continue
