@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "dashboard.py", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "dashboard/main.py", "--server.address=0.0.0.0"]
