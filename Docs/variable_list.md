@@ -627,3 +627,55 @@ Returns `dict[str, dict]` — one `evaluate_signal_accuracy` result per asset na
 |---|---|---|
 | `type` | `str` | `"win"`, `"loss"`, or `"none"` |
 | `length` | `int` | Number of consecutive matching outcomes |
+
+---
+
+## install.py — Installer Constants and Functions
+
+### Constants
+
+| Name | Type | Value | Description |
+|---|---|---|---|
+| `MIN_PYTHON` | `tuple[int, int]` | `(3, 11)` | Minimum supported Python version (inclusive). |
+| `MAX_PYTHON` | `tuple[int, int]` | `(3, 14)` | Maximum tested Python version (inclusive). |
+| `REPO_ROOT` | `pathlib.Path` | `Path(__file__).resolve().parent` | Absolute path to the project root, resolved from the installer's own location. |
+| `VENV_DIR` | `pathlib.Path` | `REPO_ROOT / ".venv"` | Path to the virtual environment directory created by the installer. |
+| `REQUIREMENTS` | `pathlib.Path` | `REPO_ROOT / "requirements.txt"` | Path to the pinned dependency file passed to `pip install -r`. |
+| `VERIFY_IMPORTS` | `list[str]` | `["streamlit", "yfinance", "pandas", "plotly", "feedparser", "vaderSentiment"]` | Package names imported inside the venv to confirm installation succeeded. |
+| `_USE_COLOUR` | `bool` | `True` on Unix TTYs, `False` on Windows and non-TTY stdout | Controls whether ANSI escape codes are emitted by the colour helper functions. |
+
+### Helper Functions
+
+| Function | Signature | Description |
+|---|---|---|
+| `_c(code, text)` | `(str, str) -> str` | Wraps `text` in the ANSI escape sequence for `code` if `_USE_COLOUR` is set, otherwise returns `text` unchanged. |
+| `green(t)` | `(str) -> str` | Green-coloured text. Used for success checkmarks. |
+| `yellow(t)` | `(str) -> str` | Yellow-coloured text. Used for warnings. |
+| `red(t)` | `(str) -> str` | Red-coloured text. Used for error messages. |
+| `bold(t)` | `(str) -> str` | Bold text. Used for step numbers and emphasis. |
+| `cyan(t)` | `(str) -> str` | Cyan-coloured text. Used for banner borders and labels. |
+| `_banner()` | `() -> None` | Prints the installer banner to stdout. |
+| `_step(n, total, msg)` | `(int, int, str) -> None` | Prints a numbered step line, e.g. `[2/5] Creating virtual environment`. |
+| `_ok(msg)` | `(str) -> None` | Prints a green checkmark success line. |
+| `_warn(msg)` | `(str) -> None` | Prints a yellow warning line (non-fatal). |
+| `_fail(msg)` | `(str) -> None` | Prints a red error line. |
+| `_abort(msg, hint)` | `(str, str) -> None` | Prints the error and optional hint, then calls `sys.exit(1)`. |
+
+### Path Helpers
+
+| Function | Signature | Returns | Description |
+|---|---|---|---|
+| `_venv_python()` | `() -> pathlib.Path` | `.venv/Scripts/python.exe` (Windows) or `.venv/bin/python` (Unix) | Path to the Python executable inside the virtual environment. |
+| `_venv_pip()` | `() -> pathlib.Path` | `.venv/Scripts/pip.exe` (Windows) or `.venv/bin/pip` (Unix) | Path to the pip executable inside the virtual environment. |
+
+### Pipeline Functions
+
+| Function | Description |
+|---|---|
+| `check_python_version()` | Reads `sys.version_info` and calls `_abort` if the version is outside `MIN_PYTHON`–`MAX_PYTHON`. |
+| `create_venv()` | Runs `python -m venv .venv` via subprocess. Skips silently if `.venv/` already exists. Aborts with the subprocess stderr on failure. |
+| `install_dependencies()` | First upgrades pip silently, then runs `pip install -r requirements.txt` with output streamed to the terminal. Aborts on non-zero exit code. |
+| `verify_install()` | Runs `python -c "import <pkg>"` for each entry in `VERIFY_IMPORTS` using `_venv_python()`. Warns per-package on failure and aborts at the end if any import failed. |
+| `generate_launch_script()` | Writes the platform-appropriate launch script(s) and returns the primary `pathlib.Path`. On Windows writes both `launch.bat` and `launch.ps1`. On Unix writes `launch.sh` and sets `chmod 0o755`. |
+| `print_success(launch_path)` | Prints the post-install next-steps message showing platform-specific launch options and the dashboard URL. |
+| `main()` | Orchestrates all five steps in order: `check_python_version` → `create_venv` → `install_dependencies` → `verify_install` → `generate_launch_script`, then calls `print_success`. |

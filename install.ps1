@@ -58,6 +58,7 @@ Set-Location $ScriptDir
 Write-Info "Searching for a compatible Python interpreter (3.11-3.14) ..."
 
 $PythonCmd = $null
+$PyVersion = $null
 $CandidateNames = @("python3.14", "python3.13", "python3.12", "python3.11", "python3", "python", "py")
 
 foreach ($Candidate in $CandidateNames) {

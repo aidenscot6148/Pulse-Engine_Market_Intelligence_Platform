@@ -7,14 +7,25 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased] — v0.3 development
 
 ### Added
+- `install.py`: Cross-platform local installer — verifies Python version (3.11–3.14), creates `.venv/` via `python -m venv`, installs `requirements.txt` inside it, verifies all six key package imports, and generates a platform-appropriate launch script (`launch.bat` + `launch.ps1` on Windows, `launch.sh` on macOS/Linux).
+- `install.sh`: macOS/Linux convenience wrapper that detects a compatible Python 3.11–3.14 interpreter across common command names and delegates to `install.py`.
+- `install.ps1`: Windows PowerShell wrapper with equivalent Python detection, including a `py` launcher fallback for specific minor versions, then delegates to `install.py`.
 - `.vscode/launch.json`: VS Code debug/run configurations for all five entry points (Dashboard, Scan Dry Run, Scan Full, Analysis CLI, Tests).
 - `.idea/runConfigurations/`: PyCharm run/debug configurations for the same five entry points, compatible with both Community and Professional editions.
 - `CONTRIBUTING.md` **IDE Setup** section documenting how to use the shared configurations in VS Code and PyCharm.
 
+### Fixed
+- `install.ps1`: `$PyVersion` was never initialized before use, causing a `StrictMode` exception on the common path where Python was found via the normal candidate loop — the script crashed before ever reaching `install.py`.
+- `install.py`: Double curly braces (`{{`/`}}`) in the generated `launch.ps1` content string wrote literal `{{` and `}}` to disk (a regular string, not an f-string), producing invalid PowerShell block syntax.
+- `install.py`: `UnicodeEncodeError` crash on Windows `cp1252` consoles when printing the box-drawing banner characters — stdout/stderr are now reconfigured to UTF-8 at startup.
+
 ### Changed
-- `.gitignore` updated to unignore `.vscode/launch.json` and `.idea/runConfigurations/` while continuing to exclude all other IDE workspace files.
+- `.gitignore` updated to ignore `launch.bat`, `launch.ps1`, and `launch.sh` (installer-generated artifacts) and to unignore `.vscode/launch.json` and `.idea/runConfigurations/`.
 - `CONTRIBUTING.md` **Pull Request Process** "Do not commit" list updated to allow the new IDE config paths and clarify which IDE files remain excluded.
-- `README.md` **Project Structure** updated to document the new `.vscode/` and `.idea/runConfigurations/` entries.
+- `README.md` **Project Structure** updated to document installer and launch-script files, `.vscode/` and `.idea/runConfigurations/` entries.
+- `README.md` **Installation** section now leads with the automated installer instructions.
+- `README.md` **Running the Dashboard** updated to mention the generated launch scripts as the primary launch method.
+- `README.md` **Roadmap** updated to reflect that the local installer is shipped.
 
 ---
 

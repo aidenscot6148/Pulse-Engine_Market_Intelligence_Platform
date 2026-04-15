@@ -72,6 +72,11 @@ Pipfile.lock
 market_data/
 *.json.gz
 
+# ─── Installer-generated launch scripts ───────────────────────────────────────
+launch.bat
+launch.ps1
+launch.sh
+
 # ─── Streamlit ────────────────────────────────────────────────────────────────
 .streamlit/secrets.toml
 .claude/

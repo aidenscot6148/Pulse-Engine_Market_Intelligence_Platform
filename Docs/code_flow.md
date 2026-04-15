@@ -496,3 +496,39 @@ flowchart TD
 
     ASSEMBLE[Assemble nested dict\ncategory -> asset -> metrics+momentum] --> RETURN([Return all_results dict])
 ```
+
+---
+
+## 16. Local Installer Pipeline
+
+`install.py` is the main installer. `install.sh` (macOS/Linux) and `install.ps1` (Windows) are thin wrappers that detect a compatible Python interpreter and then hand off to `install.py` via `exec` / `&`.
+
+```mermaid
+flowchart TD
+    WRAPPER([install.sh or install.ps1]) --> PYDETECT[Iterate candidate interpreter names\npython3.14 → python3.11 → python3 → python]
+    PYDETECT --> FOUND{Compatible Python\n3.11–3.14 found?}
+    FOUND -->|No| ABORT0([Exit 1 — install hint])
+    FOUND -->|Yes| DELEGATE[exec / & install.py]
+
+    DELEGATE --> ENTRY([install.py starts]) --> RECONFIGURE[Reconfigure stdout/stderr\nto UTF-8 on Windows]
+    RECONFIGURE --> BANNER[Print banner]
+    BANNER --> PY_CHECK[check_python_version\nverify 3.11 ≤ version ≤ 3.14]
+
+    PY_CHECK --> PY_OK{In range?}
+    PY_OK -->|No| ABORT1([sys.exit 1])
+    PY_OK -->|Yes| VENV[create_venv\n.venv/ via python -m venv\nskip if already exists]
+
+    VENV --> VENV_OK{Created or\nalready exists?}
+    VENV_OK -->|Error| ABORT2([sys.exit 1\nwith stderr hint])
+    VENV_OK -->|OK| DEPS[install_dependencies\nupgrade pip silently\nthen pip install -r requirements.txt]
+
+    DEPS --> DEPS_OK{returncode == 0?}
+    DEPS_OK -->|No| ABORT3([sys.exit 1\ncommon causes hint])
+    DEPS_OK -->|Yes| VERIFY[verify_install\nimport each of 6 packages\nvia venv Python subprocess]
+
+    VERIFY --> VER_OK{All 6 imports pass?}
+    VER_OK -->|No| ABORT4([sys.exit 1])
+    VER_OK -->|Yes| LAUNCH[generate_launch_script\nWindows: write launch.bat + launch.ps1\nmacOS/Linux: write launch.sh\nset chmod 755 on Unix]
+
+    LAUNCH --> SUCCESS([print_success\nnext-steps message\nexit 0])
+```
