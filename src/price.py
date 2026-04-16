@@ -69,7 +69,10 @@ def fetch_price_history(
                     progress=False,
                     timeout=REQUEST_TIMEOUT,
                 )
-                time.sleep(YFINANCE_REQUEST_DELAY)
+            # Sleep after releasing the semaphore so the slot is free for other
+            # workers while this thread waits — holding it during sleep blocked
+            # all PRICE_FETCH_WORKERS slots for the full delay period.
+            time.sleep(YFINANCE_REQUEST_DELAY)
 
             if data is None or data.empty:
                 log.warning("Empty data for %s (attempt %d/%d)", ticker, attempt, MAX_RETRIES)
@@ -127,7 +130,7 @@ def _fetch_via_ticker_history(ticker: str, days: int) -> Optional[pd.DataFrame]:
                 end=end.strftime("%Y-%m-%d"),
                 timeout=REQUEST_TIMEOUT,
             )
-            time.sleep(YFINANCE_REQUEST_DELAY)
+        time.sleep(YFINANCE_REQUEST_DELAY)
         if data is None or data.empty:
             return None
         if isinstance(data.columns, pd.MultiIndex):

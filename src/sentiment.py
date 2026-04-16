@@ -74,8 +74,11 @@ def score_sentiment(text: str) -> dict:
     counting if VADER is unavailable.
     """
     if VADER_AVAILABLE and _vader is not None:
-        s = _vader.polarity_scores(text)
-        return {"compound": s["compound"], "pos": s["pos"], "neg": s["neg"], "neu": s["neu"]}
+        try:
+            s = _vader.polarity_scores(text)
+            return {"compound": s["compound"], "pos": s["pos"], "neg": s["neg"], "neu": s["neu"]}
+        except (TypeError, UnicodeDecodeError, KeyError):
+            log.debug("VADER failed on text (len=%d), using fallback", len(text))
     return _fallback_sentiment(text)
 
 

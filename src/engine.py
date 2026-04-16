@@ -55,10 +55,12 @@ def _build_error_payload(stage: str, exc: Exception, **context) -> dict:
 
 try:
     from storage.storage import save_snapshot as _save_snapshot
+    from storage.storage import get_historical_features as _get_historical_features
     STORAGE_AVAILABLE = True
 except ImportError:
     STORAGE_AVAILABLE = False
-    def _save_snapshot(*_a, **_kw): pass  # noqa: E731
+    def _save_snapshot(*_a, **_kw): pass           # noqa: E731
+    def _get_historical_features(*_a, **_kw): return {}  # noqa: E731
 
 
 # ── Single-asset analysis ─────────────────────────────────────────────────────
@@ -133,8 +135,7 @@ def analyse_asset(
     historical_features: dict = {}
     if STORAGE_AVAILABLE:
         try:
-            from storage.storage import get_historical_features
-            historical_features = get_historical_features(asset_name)
+            historical_features = _get_historical_features(asset_name)
         except Exception as exc:
             log.debug("Historical features unavailable for %s: %s", asset_name, exc)
 
