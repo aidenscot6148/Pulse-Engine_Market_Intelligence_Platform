@@ -241,6 +241,8 @@ def render_signal_card(
     """Render the signal card (and significant-move warning if applicable)."""
     sig_score  = float(snap.get("signal_score") or 0.0)
     sig_label  = snap.get("signal_label") or "Neutral"
+    low_news_conf = bool(snap.get("low_news_confidence", False))
+    news_count = int(snap.get("news_article_count", 0) or 0)
     conf       = snap.get("confidence") or "low"
     conf_class = {"high": "conf-high", "medium": "conf-medium"}.get(conf, "conf-low")
     conf_label = conf.upper()
@@ -263,6 +265,14 @@ def render_signal_card(
             )
         else:
             st.info("No snapshot data yet — run a full scan from the sidebar.")
+
+    if low_news_conf:
+        st.warning(
+            "⚠️ Low news coverage — this signal is based primarily on price data. "
+            "Sentiment component has low confidence.",
+            icon="⚠️",
+        )
+        st.caption(f"Matched relevant articles: {news_count}")
 
     if is_significant and chg_1d is not None:
         verb = "surged" if chg_1d > 0 else "dropped"

@@ -22,6 +22,8 @@ from config.settings import (
     ASSET_CLASS_WEIGHTS,
     ASSET_KEYWORDS,
     EVENT_TRIGGERS,
+    LOW_NEWS_SENTIMENT_WEIGHT_MULTIPLIER,
+    MIN_NEWS_ARTICLES_FOR_CONFIDENCE,
     SIGNAL_THRESHOLDS,
     SOURCE_WEIGHTS,
 )
@@ -150,8 +152,20 @@ def compute_signal_score(
     Weak signals between -1.0 and +1.0 are labelled "Neutral".
     Total is clamped to [-10, +10].
     """
+    news_article_count = len(news)
+    low_news_confidence = news_article_count < MIN_NEWS_ARTICLES_FOR_CONFIDENCE
+
     if not metrics:
-        return {"score": 0.0, "label": "No Data", "components": {}, "raw_components": {}}
+        return {
+            "score": 0.0,
+            "label": "No Data",
+            "signal_score": 0.0,
+            "signal_label": "No Data",
+            "low_news_confidence": low_news_confidence,
+            "news_article_count": news_article_count,
+            "components": {},
+            "raw_components": {},
+        }
 
     raw: dict[str, float] = {}
 
@@ -179,7 +193,10 @@ def compute_signal_score(
     # 4. News sentiment
     if news:
         avg_sent = sum(a.get("sentiment", {}).get("compound", 0.0) for a in news) / len(news)
-        raw["sentiment"] = round(max(-2.0, min(2.0, avg_sent * 4.0)), 2)
+        sentiment_raw = max(-2.0, min(2.0, avg_sent * 4.0))
+        if low_news_confidence:
+            sentiment_raw *= LOW_NEWS_SENTIMENT_WEIGHT_MULTIPLIER
+        raw["sentiment"] = round(sentiment_raw, 2)
     else:
         raw["sentiment"] = 0.0
 
@@ -226,6 +243,10 @@ def compute_signal_score(
     return {
         "score":          total,
         "label":          label,
+        "signal_score":   total,
+        "signal_label":   label,
+        "low_news_confidence": low_news_confidence,
+        "news_article_count":  news_article_count,
         "components":     components,
         "raw_components": raw,
         "category":       category,

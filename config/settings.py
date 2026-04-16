@@ -284,6 +284,8 @@ LOOKBACK_DAYS = 30  # 30 days. the attention span of a goldfish with a Bloomberg
 PRICE_CHANGE_THRESHOLD = 2.0
 NEWS_MAX_AGE_HOURS = 96
 NEWS_MAX_ARTICLES = 300
+MIN_NEWS_ARTICLES_FOR_CONFIDENCE = 3
+LOW_NEWS_SENTIMENT_WEIGHT_MULTIPLIER = 0.3
 
 # Minimum raw relevance score (sum of keyword weights) for an article to be classed as highly relevant.
 # Scale: keyword weights sum as integers; 6 typically means 2+ strong keyword hits (weight 3 each).

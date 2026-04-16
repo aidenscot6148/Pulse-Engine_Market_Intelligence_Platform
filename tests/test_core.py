@@ -105,6 +105,31 @@ def test_src_signal_score_in_range(synthetic_metrics, synthetic_momentum):
     assert -10.0 <= result["score"] <= 10.0
 
 
+def test_low_news_confidence_reduces_sentiment_weight():
+    """Low article counts should be flagged and dampen sentiment contribution."""
+    metrics = {"trend": "sideways", "change_1d": 0.0}
+    momentum = {"roc_10d": 0.0, "rsi": 50.0, "trend_strength": 0.0}
+
+    low_news = [{"sentiment": {"compound": 0.5}}]
+    high_news = [
+        {"sentiment": {"compound": 0.5}},
+        {"sentiment": {"compound": 0.5}},
+        {"sentiment": {"compound": 0.5}},
+    ]
+
+    low = src_signal_score(metrics, momentum, low_news)
+    high = src_signal_score(metrics, momentum, high_news)
+
+    assert low["low_news_confidence"] is True
+    assert low["news_article_count"] == 1
+    assert low["signal_score"] == low["score"]
+    assert low["signal_label"] == low["label"]
+
+    assert high["low_news_confidence"] is False
+    assert high["news_article_count"] == 3
+    assert low["components"]["sentiment"] < high["components"]["sentiment"]
+
+
 # ── Sentiment ─────────────────────────────────────────────────────────────────
 
 def test_sentiment_compound_in_range():
