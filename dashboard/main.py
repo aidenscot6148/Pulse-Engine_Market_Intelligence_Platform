@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import datetime as dt
+import re
 import threading
 import time
 
@@ -54,6 +55,7 @@ from app.analysis import (
     analyse_market_context,
 )
 from dashboard.data import (
+    cached_generated_keywords,
     cached_news,
     cached_history,
     cached_scan_summary,
@@ -72,6 +74,15 @@ st.set_page_config(
 )
 
 load_css()
+
+
+_TICKER_INPUT_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-=\^]{0,14}$")
+
+
+def _normalize_ticker_input(raw: str) -> str:
+    """Return a normalized Yahoo ticker symbol, or empty string if invalid."""
+    val = (raw or "").strip().upper()
+    return val if _TICKER_INPUT_RE.fullmatch(val) else ""
 
 
 # ── Scan orchestration ─────────────────────────────────────────────────────────
@@ -179,19 +190,48 @@ _summary_date    = _summary.get("scan_date", "")
 st.sidebar.markdown(ui.sidebar_header_html(), unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
-categories      = list(TRACKED_ASSETS.keys())
-default_cat_idx = categories.index(DEFAULT_CATEGORY) if DEFAULT_CATEGORY in categories else 0
-selected_category: str = (
-    st.sidebar.selectbox("Category", categories, index=default_cat_idx)
-    or categories[0]
+st.sidebar.markdown("**Ticker Lookup (Local App Only)**")
+custom_ticker_raw = st.sidebar.text_input(
+    "Custom Yahoo ticker",
+    key="_custom_ticker_input",
+    placeholder="e.g. PLTR, ARM, TSM, BRK-B",
 )
+custom_ticker = _normalize_ticker_input(custom_ticker_raw)
+if custom_ticker_raw.strip() and not custom_ticker:
+    st.sidebar.warning(
+        "Invalid ticker format. Use letters/numbers and optional ., -, ^, = characters.",
+        icon="⚠️",
+    )
 
-asset_names = list(TRACKED_ASSETS[selected_category].keys())
-if not asset_names:
-    st.error(f"No assets configured for category: {selected_category}")
-    st.stop()
-selected_asset: str = st.sidebar.selectbox("Asset", asset_names) or asset_names[0]
-ticker = TRACKED_ASSETS[selected_category][selected_asset]
+if st.sidebar.button(
+    "Clear custom ticker",
+    disabled=not bool(custom_ticker_raw.strip()),
+):
+    st.session_state["_custom_ticker_input"] = ""
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+using_custom_ticker = bool(custom_ticker)
+
+if using_custom_ticker:
+    selected_category = "Custom Ticker"
+    selected_asset = custom_ticker
+    ticker = custom_ticker
+else:
+    categories = list(TRACKED_ASSETS.keys())
+    default_cat_idx = categories.index(DEFAULT_CATEGORY) if DEFAULT_CATEGORY in categories else 0
+    selected_category = (
+        st.sidebar.selectbox("Category", categories, index=default_cat_idx)
+        or categories[0]
+    )
+
+    asset_names = list(TRACKED_ASSETS[selected_category].keys())
+    if not asset_names:
+        st.error(f"No assets configured for category: {selected_category}")
+        st.stop()
+    selected_asset = st.sidebar.selectbox("Asset", asset_names) or asset_names[0]
+    ticker = TRACKED_ASSETS[selected_category][selected_asset]
 
 st.sidebar.markdown("---")
 
@@ -200,6 +240,10 @@ run_context = st.sidebar.checkbox(
     value=False,
     help="Compares against sector peers and benchmark. Slower but deeper.",
 )
+if using_custom_ticker and run_context:
+    st.sidebar.caption(
+        "Market-context analysis is skipped for custom tickers unless peers are configured."
+    )
 
 st.sidebar.markdown("---")
 st.sidebar.caption(f"Ticker: `{ticker}`")
@@ -271,12 +315,21 @@ st.caption(f"{selected_category}  ·  `{ticker}`  ·  last 30 days")
 
 ui.render_data_status_banner(_scan_state, _stale, _summary)
 
-snap           = _summary_results.get(selected_category, {}).get(selected_asset, {})
+snap = (
+    _summary_results.get(selected_category, {}).get(selected_asset, {})
+    if selected_category in TRACKED_ASSETS
+    else {}
+)
 chg_1d         = snap.get("change_1d")
 is_significant = chg_1d is not None and abs(chg_1d) >= PRICE_CHANGE_THRESHOLD
 
 _live_loaded = st.session_state.get("_live_for") == ticker
 _news_loaded = st.session_state.get("_news_for") == ticker
+_custom_keywords = (
+    cached_generated_keywords(ticker)
+    if using_custom_ticker and (_news_loaded or _live_loaded)
+    else None
+)
 
 
 # SECTION 1 — Signal card (snapshot)
@@ -299,7 +352,7 @@ if not _news_loaded:
     st.caption("News is not fetched on startup. Click above to load from 12 RSS feeds.")
 else:
     articles   = cached_news()
-    news       = correlate_news(selected_asset, articles)
+    news       = correlate_news(selected_asset, articles, keywords=_custom_keywords)
     disp_clust = get_display_clusters(news, max_clusters=2)
     ui.render_news_section(
         disp_clust["clusters"],
@@ -332,10 +385,18 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                 live_momentum = compute_momentum_metrics(history)
 
                 _live_articles: list[dict] = cached_news() if _news_loaded else []
-                live_news = correlate_news(selected_asset, _live_articles)
+                live_news = correlate_news(
+                    selected_asset,
+                    _live_articles,
+                    keywords=_custom_keywords,
+                )
 
                 market_ctx = None
-                if run_context and live_metrics.get("change_1d") is not None:
+                if (
+                    run_context
+                    and selected_category in TRACKED_ASSETS
+                    and live_metrics.get("change_1d") is not None
+                ):
                     with st.spinner("Analysing market context (peers + benchmark) ..."):
                         try:
                             market_ctx = analyse_market_context(
@@ -369,8 +430,11 @@ ui.render_heatmap(_summary, _summary_date)
 # SECTION 14 — Category overview
 st.markdown("---")
 with st.expander("Category Overview", expanded=False):
-    _cat_data = _summary.get("category_rows", {}).get(selected_category, {})
-    ui.render_category_overview(_cat_data, _summary_date)
+    if selected_category in TRACKED_ASSETS:
+        _cat_data = _summary.get("category_rows", {}).get(selected_category, {})
+        ui.render_category_overview(_cat_data, _summary_date)
+    else:
+        st.info("Category overview is only available for the 24 tracked assets.")
 
 
 # ── Footer ─────────────────────────────────────────────────────────────────────

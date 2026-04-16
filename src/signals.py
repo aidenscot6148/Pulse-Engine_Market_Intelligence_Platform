@@ -58,20 +58,35 @@ for _kw_pairs in ASSET_KEYWORDS.values():
 
 # ── News-asset correlation ────────────────────────────────────────────────────
 
-def correlate_news(asset_name: str, articles: list[dict]) -> list[dict]:
+def correlate_news(
+    asset_name: str,
+    articles: list[dict],
+    keywords: Optional[list[str]] = None,
+) -> list[dict]:
     """
     Match articles to *asset_name* using weighted keywords, a recency bonus,
     and a source-credibility multiplier.
 
+    When *keywords* is provided, those terms are added as medium-weight
+    relevance terms. This enables arbitrary ticker support without modifying
+    ASSET_KEYWORDS.
+
     Returns a list of enriched article dicts (with relevance_score, sentiment,
     and events_detected fields) sorted by descending relevance.
     """
-    kw_pairs = (
+    kw_pairs = list(
         ASSET_KEYWORDS.get(asset_name)
         or ASSET_KEYWORDS.get(asset_name.title(), [])
-    ) + [(asset_name.lower(), 2)]
+    )
+    kw_pairs.append((asset_name.lower(), 2))
 
-    now     = dt.datetime.now(dt.timezone.utc)
+    if keywords:
+        for kw in keywords:
+            clean = (kw or "").strip().lower()
+            if len(clean) >= 3:
+                kw_pairs.append((clean, 2))
+
+    now = dt.datetime.now(dt.timezone.utc)
     matched: list[dict] = []
     for article in articles:
         blob  = (article["title"] + " " + article["summary"]).lower()

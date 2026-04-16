@@ -11,7 +11,7 @@ from src.explanation import _detect_contradictions
 from src.news import _jaccard, deduplicate_articles
 from src.price import compute_price_metrics, compute_roc
 from src.sentiment import score_sentiment
-from src.signals import compute_signal_score
+from src.signals import compute_signal_score, correlate_news
 
 
 def test_compute_price_metrics_known_values(ohlcv_df):
@@ -185,3 +185,24 @@ def test_detect_contradictions_each_condition_independently():
         contradictions = _detect_contradictions(metrics, momentum, factors, signal)
         found_types = {c["type"] for c in contradictions}
         assert expected_type in found_types
+
+
+def test_correlate_news_accepts_generated_keywords_for_custom_ticker():
+    """Custom ticker keywords should enable matching even without curated asset entries."""
+    now = dt.datetime.now(dt.timezone.utc)
+    articles = [
+        {
+            "title": "Palantir wins major U.S. defense contract",
+            "summary": "AI platform secures multi-year agreement.",
+            "link": "https://example.com/pltr",
+            "source": "MarketWatch",
+            "published": now,
+        }
+    ]
+
+    without_keywords = correlate_news("PLTR", articles)
+    with_keywords = correlate_news("PLTR", articles, keywords=["Palantir", "Alex Karp"])
+
+    assert without_keywords == []
+    assert len(with_keywords) == 1
+    assert with_keywords[0]["relevance_score"] > 0

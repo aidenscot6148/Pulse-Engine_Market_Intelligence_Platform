@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from config.settings import NEWS_CACHE_TTL, PRICE_CACHE_TTL
-from app.analysis import fetch_news_articles, fetch_price_history
+from app.analysis import fetch_news_articles, fetch_price_history, generate_keywords
 from src.errors import DataFetchError
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,11 @@ except ImportError:
 @st.cache_data(ttl=NEWS_CACHE_TTL, show_spinner="Fetching news feeds ...")
 def cached_news() -> list[dict]:
     return fetch_news_articles()
+
+
+@st.cache_data(ttl=NEWS_CACHE_TTL, show_spinner="Building ticker keywords ...")
+def cached_generated_keywords(symbol: str) -> list[str]:
+    return generate_keywords(symbol)
 
 
 @st.cache_data(ttl=PRICE_CACHE_TTL, show_spinner="Fetching prices ...")

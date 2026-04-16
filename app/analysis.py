@@ -42,6 +42,7 @@ from src.news import (  # noqa: F401
     deduplicate_articles,
     cluster_articles,
     get_display_clusters,
+    generate_keywords,
 )
 
 from src.signals import (  # noqa: F401

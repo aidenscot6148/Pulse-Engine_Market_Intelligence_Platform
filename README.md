@@ -261,6 +261,9 @@ On startup the dashboard:
 4. Displays `System initializing — full market scan running in background...` while the scan is active
 5. Fetches price and news data for the currently selected asset and renders the full analysis panel
 
+You can also enter any valid Yahoo Finance ticker in the sidebar (for example `PLTR`, `ARM`, `TSM`, `BRK-B`) to run arbitrary ticker analysis locally without editing `config/settings.py`.
+For custom tickers, keywords are auto-generated from ticker metadata and the dashboard applies low-news-confidence safeguards when coverage is sparse.
+
 The sidebar shows the scan status (running / N minutes ago / pending first run) and a manual `Run full scan now` button.
 
 ---
