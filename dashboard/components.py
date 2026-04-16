@@ -61,8 +61,7 @@ _WARN_FACTOR_TYPES = {"rsi_overbought", "rsi_oversold", "sentiment_diverged", "v
 
 # ── Sidebar helpers ────────────────────────────────────────────────────────────
 
-def _logo_img_html() -> str:
-    """Return an <img> tag with the logo as base64, or an icon span fallback."""
+def _build_logo_html() -> str:
     logo_path = Path(__file__).parent.parent / "assets" / "logo" / "pulseengine_logo.png"
     if logo_path.exists():
         data = base64.b64encode(logo_path.read_bytes()).decode()
@@ -72,6 +71,16 @@ def _logo_img_html() -> str:
             f'margin:0 auto 4px auto;opacity:0.93;" />'
         )
     return f"<span style='font-size:1.4rem'>{DASHBOARD_ICON}</span>"
+
+
+# Logo HTML is static for the lifetime of the process — build it once at import
+# time so the PNG is not read and base64-encoded on every Streamlit rerun.
+_LOGO_HTML: str = _build_logo_html()
+
+
+def _logo_img_html() -> str:
+    """Return an <img> tag with the logo as base64, or an icon span fallback."""
+    return _LOGO_HTML
 
 
 def sidebar_header_html() -> str:

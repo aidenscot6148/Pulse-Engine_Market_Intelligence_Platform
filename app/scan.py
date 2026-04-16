@@ -63,6 +63,15 @@ from pathlib import Path
 from config.settings import TRACKED_ASSETS, STORAGE_DIR
 from app.analysis import fetch_news_articles, analyse_asset, fetch_all_metrics_parallel
 
+try:
+    from storage.storage import apply_retention_policy as _apply_retention_policy
+    from storage.storage import cleanup_old_snapshots as _cleanup_old_snapshots
+    _STORAGE_AVAILABLE = True
+except ImportError:
+    _STORAGE_AVAILABLE = False
+    def _apply_retention_policy() -> int: return 0   # noqa: E731
+    def _cleanup_old_snapshots() -> int: return 0    # noqa: E731
+
 log = logging.getLogger(__name__)
 
 _SUMMARY_FILE = Path(STORAGE_DIR) / "_scan_summary.json.gz"
@@ -294,15 +303,15 @@ def run_scan(verbose: bool = True, dry_run: bool = False) -> dict:
 
     if not dry_run:
         _save_summary(scan_result)  # seal it in a zip. like embarrassment in a jar
-        # Apply retention policy on stored per-asset snapshots
-        try:
-            from storage.storage import apply_retention_policy, cleanup_old_snapshots
-            apply_retention_policy()
-            deleted = cleanup_old_snapshots()
-            if deleted:
-                log.info("Retention cleanup: removed %d old snapshot(s).", deleted)
-        except Exception as exc:
-            log.warning("Retention policy failed: %s", exc)
+        # Apply retention policy on stored per-asset snapshots.
+        if _STORAGE_AVAILABLE:
+            try:
+                _apply_retention_policy()
+                deleted = _cleanup_old_snapshots()
+                if deleted:
+                    log.info("Retention cleanup: removed %d old snapshot(s).", deleted)
+            except OSError as exc:
+                log.warning("Retention policy failed: %s", exc)
 
     log.info(
         "Scan complete: %d/%d assets processed, %d error(s).",
@@ -321,7 +330,7 @@ def load_last_scan_summary() -> dict:
     try:
         with gzip.open(_SUMMARY_FILE, "rb") as fh:
             return json.loads(fh.read().decode("utf-8"))
-    except Exception as exc:
+    except (OSError, gzip.BadGzipFile, UnicodeDecodeError, json.JSONDecodeError) as exc:
         log.warning("Could not load scan summary: %s", exc)
         return {}
 
@@ -345,7 +354,7 @@ def _save_summary(payload: dict) -> None:
         with gzip.open(_SUMMARY_FILE, "wb", compresslevel=6) as fh:
             fh.write(raw)
         log.info("Scan summary saved: %s", _SUMMARY_FILE)
-    except Exception as exc:
+    except OSError as exc:
         log.warning("Could not save scan summary: %s", exc)
 
 

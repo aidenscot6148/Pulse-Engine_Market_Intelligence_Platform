@@ -46,7 +46,6 @@ from config.settings import (
 from app.analysis import (
     VADER_AVAILABLE,
     correlate_news,
-    cluster_articles,
     get_display_clusters,
     compute_price_metrics,
     compute_momentum_metrics,
@@ -301,7 +300,6 @@ if not _news_loaded:
 else:
     articles   = cached_news()
     news       = correlate_news(selected_asset, articles)
-    _clusters  = cluster_articles(news)          # used downstream by get_display_clusters
     disp_clust = get_display_clusters(news, max_clusters=2)
     ui.render_news_section(
         disp_clust["clusters"],
