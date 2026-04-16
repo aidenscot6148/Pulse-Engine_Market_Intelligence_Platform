@@ -27,6 +27,7 @@ from config.settings import (
     STORAGE_REDUCED_DETAIL_DAYS,
     STORAGE_MAX_DAYS,
     SNAPSHOT_LOAD_LIMIT,
+    TRACKED_ASSETS,
 )
 from src.errors import StorageError
 
@@ -63,6 +64,16 @@ def _ensure_dir() -> None:
 
 def _asset_prefix(asset_name: str) -> str:
     return asset_name.replace(" ", "_").replace("/", "-").replace("&", "and")
+
+
+# Reverse map: storage prefix → asset display name.  Built once at module load
+# so list_tracked_assets_with_history() can resolve names from filenames alone
+# without reading any snapshot files.
+_PREFIX_TO_ASSET: dict[str, str] = {
+    _asset_prefix(name): name
+    for assets in TRACKED_ASSETS.values()
+    for name in assets
+}
 
 
 def _snapshot_path(asset_name: str, date: dt.date) -> Path:
@@ -466,16 +477,18 @@ def cleanup_old_snapshots(days_to_keep: int = STORAGE_MAX_DAYS) -> int:
 
 
 def list_tracked_assets_with_history() -> list[str]:
-    """Return asset names that have at least one stored snapshot."""
+    """Return asset names that have at least one stored snapshot.
+
+    Derives names from filenames alone (no file reads) using the pre-built
+    _PREFIX_TO_ASSET reverse map, making this O(files) instead of O(files × parse).
+    """
     if not _storage_path.exists():
         return []
-    names: set[str] = set()
+    prefixes: set[str] = set()
     for path in _storage_path.glob("*.json.gz"):
         if path.name.startswith("_"):
             continue
-        try:
-            data = _read_gz(path)
-            names.add(data.get("asset", ""))
-        except (OSError, ValueError, KeyError):
-            pass
-    return sorted(n for n in names if n)
+        stem = path.name[: -len(".json.gz")]       # strip extension
+        prefix = stem.rsplit("_", 1)[0]            # strip _YYYYMMDD suffix
+        prefixes.add(prefix)
+    return sorted(_PREFIX_TO_ASSET[p] for p in prefixes if p in _PREFIX_TO_ASSET)
