@@ -45,6 +45,15 @@ def _kw_re(kw: str) -> re.Pattern:
     return _KW_PATTERN_CACHE[kw]
 
 
+# Pre-warm the pattern cache for every keyword in ASSET_KEYWORDS at import time.
+# Without this, the first scan pays re.compile() cost on every keyword; subsequent
+# scans are free.  Dynamic keywords (e.g. asset_name.lower()) still fall through
+# to the lazy branch above.
+for _kw_pairs in ASSET_KEYWORDS.values():
+    for _kw, _ in _kw_pairs:
+        _kw_re(_kw)
+
+
 # ── News-asset correlation ────────────────────────────────────────────────────
 
 def correlate_news(asset_name: str, articles: list[dict]) -> list[dict]:
@@ -60,6 +69,7 @@ def correlate_news(asset_name: str, articles: list[dict]) -> list[dict]:
         or ASSET_KEYWORDS.get(asset_name.title(), [])
     ) + [(asset_name.lower(), 2)]
 
+    now     = dt.datetime.now(dt.timezone.utc)
     matched: list[dict] = []
     for article in articles:
         blob  = (article["title"] + " " + article["summary"]).lower()
@@ -72,7 +82,7 @@ def correlate_news(asset_name: str, articles: list[dict]) -> list[dict]:
         recency_bonus = 0
         if article.get("published"):
             age_h = (
-                dt.datetime.now(dt.timezone.utc) - article["published"]
+                now - article["published"]
             ).total_seconds() / 3600
             if age_h < 24:
                 recency_bonus = 2

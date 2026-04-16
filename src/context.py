@@ -161,17 +161,26 @@ def analyse_market_context(
 
 # ── Lookup helpers ────────────────────────────────────────────────────────────
 
+# Pre-built O(1) lookup tables derived from the static TRACKED_ASSETS config.
+# Iterating the nested dict on every peer lookup added up across 24 assets × ~5
+# peers each; a flat dict collapses that to a single hash probe per call.
+_TICKER_MAP: dict[str, str] = {
+    name: ticker
+    for assets in TRACKED_ASSETS.values()
+    for name, ticker in assets.items()
+}
+_CATEGORY_MAP: dict[str, str] = {
+    name: cat
+    for cat, assets in TRACKED_ASSETS.items()
+    for name in assets
+}
+
+
 def _find_ticker(asset_name: str) -> Optional[str]:
-    """Return the ticker for *asset_name* by scanning TRACKED_ASSETS."""
-    for _cat, assets in TRACKED_ASSETS.items():
-        if asset_name in assets:
-            return assets[asset_name]
-    return None
+    """Return the ticker for *asset_name*."""
+    return _TICKER_MAP.get(asset_name)
 
 
 def find_category(asset_name: str) -> Optional[str]:
     """Return the category string for *asset_name*, or None if not tracked."""
-    for cat, assets in TRACKED_ASSETS.items():
-        if asset_name in assets:
-            return cat
-    return None
+    return _CATEGORY_MAP.get(asset_name)
