@@ -121,8 +121,13 @@ def deduplicate_articles(articles: list[dict]) -> list[dict]:
 
     When two titles exceed the similarity threshold, the one that appears
     earlier in the list (higher relevance / more recent) is kept.
+
+    Uses an inverted token index so only articles sharing at least one token
+    are compared (Jaccard >= threshold requires a non-empty intersection),
+    reducing the worst-case from O(n²) to O(n × avg_overlap).
     """
-    seen_token_sets: list[set] = []
+    # token → list of previously accepted token-sets that contain that token
+    inverted_index: dict[str, list[set]] = {}
     deduped: list[dict] = []
 
     for article in articles:
@@ -130,13 +135,27 @@ def deduplicate_articles(articles: list[dict]) -> list[dict]:
         if not tokens:
             deduped.append(article)
             continue
+
+        # Collect candidate sets that share ≥1 token with the current article.
+        # Using id() for O(1) identity-based deduplication avoids comparing the
+        # same set object twice when it appears under multiple shared tokens.
+        seen_ids: set[int] = set()
+        candidates: list[set] = []
+        for token in tokens:
+            for prev_set in inverted_index.get(token, ()):
+                sid = id(prev_set)
+                if sid not in seen_ids:
+                    seen_ids.add(sid)
+                    candidates.append(prev_set)
+
         is_dup = any(
             _jaccard(tokens, prev) >= DEDUP_SIMILARITY_THRESHOLD
-            for prev in seen_token_sets
+            for prev in candidates
         )
         if not is_dup:
-            seen_token_sets.append(tokens)
             deduped.append(article)
+            for token in tokens:
+                inverted_index.setdefault(token, []).append(tokens)
 
     return deduped
 
