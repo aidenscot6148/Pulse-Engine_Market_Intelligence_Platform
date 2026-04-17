@@ -269,7 +269,14 @@ def generate_keywords(ticker: str) -> list[str]:
     thread.join(timeout=REQUEST_TIMEOUT)
 
     if thread.is_alive():
-        log.warning("generate_keywords(%r): metadata fetch timed out", ticker)
+        # Thread is abandoned — yfinance is still running in the background.
+        # Log at error level so repeated timeouts are visible in monitoring.
+        log.error(
+            "generate_keywords(%r): metadata fetch timed out after %ds — "
+            "daemon thread left running; consider reducing REQUEST_TIMEOUT",
+            ticker, REQUEST_TIMEOUT,
+        )
+        _result[0] = None  # discard any partial result the thread may write later
         return [ticker]
 
     if _exc[0] is not None:

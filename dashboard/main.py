@@ -26,10 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import datetime as dt
+import logging
 import re
 import threading
 import time
 
+import pandas as pd
 import streamlit as st
 
 from config.settings import (
@@ -54,6 +56,7 @@ from app.analysis import (
     build_explanation,
     analyse_market_context,
 )
+from src.errors import DataFetchError
 from dashboard.data import (
     cached_generated_keywords,
     cached_news,
@@ -63,6 +66,8 @@ from dashboard.data import (
 )
 from dashboard.styles import load_css
 import dashboard.components as ui
+
+log = logging.getLogger(__name__)
 
 
 # ── Page configuration ─────────────────────────────────────────────────────────
@@ -76,7 +81,7 @@ st.set_page_config(
 load_css()
 
 
-_TICKER_INPUT_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-=\^]{0,14}$")
+_TICKER_INPUT_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-=^]{0,14}$")
 
 
 def _normalize_ticker_input(raw: str) -> str:
@@ -374,7 +379,11 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
             st.rerun()
     else:
         with st.spinner("Loading live analysis ..."):
-            history = cached_history(ticker)
+            try:
+                history = cached_history(ticker)
+            except DataFetchError as _price_exc:
+                log.warning("Price fetch failed for %s: %s", ticker, _price_exc)
+                history = pd.DataFrame()
             if history.empty:
                 st.error(
                     f"Could not load price data for **{selected_asset}** (`{ticker}`). "

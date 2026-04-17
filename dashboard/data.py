@@ -13,9 +13,8 @@ import logging
 import pandas as pd
 import streamlit as st
 
-from config.settings import NEWS_CACHE_TTL, PRICE_CACHE_TTL
+from config.settings import NEWS_CACHE_TTL, PRICE_CACHE_TTL, SCAN_INTERVAL_MINUTES
 from app.analysis import fetch_news_articles, fetch_price_history, generate_keywords
-from src.errors import DataFetchError
 
 log = logging.getLogger(__name__)
 
@@ -44,15 +43,14 @@ def cached_generated_keywords(symbol: str) -> list[str]:
 
 @st.cache_data(ttl=PRICE_CACHE_TTL, show_spinner="Fetching prices ...")
 def cached_history(symbol: str) -> pd.DataFrame:
-    try:
-        result = fetch_price_history(symbol)
-    except DataFetchError as exc:
-        log.warning("Price fetch failed for %s: %s", symbol, exc)
-        return pd.DataFrame()
+    # Let DataFetchError propagate — st.cache_data does not cache exceptions,
+    # so transient network failures retry on the next call instead of being
+    # frozen as an empty DataFrame for the full TTL.
+    result = fetch_price_history(symbol)
     return result if result is not None else pd.DataFrame()
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=SCAN_INTERVAL_MINUTES * 60)
 def cached_scan_summary(cache_token: int = 0) -> dict:
     """Load the latest scan summary from disk — no network calls."""
     _ = cache_token  # cache-buster only; kept out of the return value on purpose
