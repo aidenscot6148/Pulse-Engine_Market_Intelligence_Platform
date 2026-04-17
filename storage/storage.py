@@ -7,4 +7,10 @@ New code should import directly from pulseengine.core.
 
 from __future__ import annotations
 
-from pulseengine.core.storage import *  # noqa: F401, F403
+import sys
+
+import pulseengine.core.storage as _core_storage
+
+# Alias legacy module path to the core module object so monkeypatching and
+# private helper imports keep working exactly as before.
+sys.modules[__name__] = _core_storage
