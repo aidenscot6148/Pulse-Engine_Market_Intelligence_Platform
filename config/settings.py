@@ -306,7 +306,6 @@ DEFAULT_CATEGORY = "Commodities"
 
 #  8. CACHE / PERFORMANCE
 
-CACHE_TTL_SECONDS = 300        # legacy fallback (unused directly)
 PRICE_CACHE_TTL   = 90         # prices / metrics  → refresh ~every 1–2 min
 NEWS_CACHE_TTL    = 300        # news articles      → refresh ~every 5 min
 REQUEST_TIMEOUT = 20

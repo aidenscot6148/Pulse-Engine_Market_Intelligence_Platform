@@ -17,8 +17,6 @@ import pytest
 
 # Backward-compat shim imports — these must keep working
 from app.analysis import (
-    _compute_rsi,
-    _compute_roc,
     compute_momentum_metrics,
     compute_price_metrics,
     compute_signal_score,
@@ -28,10 +26,9 @@ from app.analysis import (
 
 from src.errors import DataFetchError
 from src.news import fetch_news_articles
-from src.price import fetch_price_history
+from src.price import fetch_price_history, compute_rsi, compute_roc
 
 # Canonical imports — new code should use these
-from src.price import _compute_rsi as _src_rsi, _compute_roc as _src_roc
 from src.sentiment import score_sentiment as src_score_sentiment
 import datetime as dt
 
@@ -44,32 +41,22 @@ from src.signals import compute_signal_score as src_signal_score, correlate_news
 def test_rsi_always_in_range(price_series_rising, price_series_falling, price_series_flat):
     """INVARIANT: RSI must always be between 0 and 100, no matter what."""
     for series in [price_series_rising, price_series_falling, price_series_flat]:
-        result = _compute_rsi(series)
+        result = compute_rsi(series)
         assert 0.0 <= result <= 100.0
 
 
 def test_rsi_direction(price_series_rising, price_series_falling):
     """Rising series → RSI above 50. Falling → RSI below 50."""
-    assert _compute_rsi(price_series_rising) > 50
-    assert _compute_rsi(price_series_falling) < 50
-
-
-def test_src_rsi_matches_shim(price_series_rising):
-    """src.price._compute_rsi must return the same result as the shim."""
-    assert _src_rsi(price_series_rising) == _compute_rsi(price_series_rising)
+    assert compute_rsi(price_series_rising) > 50
+    assert compute_rsi(price_series_falling) < 50
 
 
 # ── ROC ───────────────────────────────────────────────────────────────────────
 
 def test_roc_sign(price_series_rising, price_series_falling):
     """ROC should be positive for an uptrend and negative for a downtrend."""
-    assert _compute_roc(price_series_rising) > 0
-    assert _compute_roc(price_series_falling) < 0
-
-
-def test_src_roc_matches_shim(price_series_rising):
-    """src.price._compute_roc must return the same result as the shim."""
-    assert _src_roc(price_series_rising) == _compute_roc(price_series_rising)
+    assert compute_roc(price_series_rising) > 0
+    assert compute_roc(price_series_falling) < 0
 
 
 # ── Momentum metrics ──────────────────────────────────────────────────────────

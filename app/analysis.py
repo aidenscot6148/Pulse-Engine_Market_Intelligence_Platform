@@ -80,10 +80,6 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
-# Backward-compat aliases retained for older imports and tests.
-_compute_rsi = compute_rsi
-_compute_roc = compute_roc
-
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

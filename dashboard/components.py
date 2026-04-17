@@ -78,16 +78,11 @@ def _build_logo_html() -> str:
 _LOGO_HTML: str = _build_logo_html()
 
 
-def _logo_img_html() -> str:
-    """Return an <img> tag with the logo as base64, or an icon span fallback."""
-    return _LOGO_HTML
-
-
 def sidebar_header_html() -> str:
     """Return the full sidebar header HTML (logo + subtitle)."""
     return f"""
     <div style="text-align:center;padding:10px 0 6px 0;">
-      {_logo_img_html()}
+      {_LOGO_HTML}
       <div style="
         font-family:'EB Garamond','Georgia',serif;
         font-size:0.66rem;
