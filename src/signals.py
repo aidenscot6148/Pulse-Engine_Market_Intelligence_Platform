@@ -89,7 +89,8 @@ def correlate_news(
     now = dt.datetime.now(dt.timezone.utc)
     matched: list[dict] = []
     for article in articles:
-        blob  = (article["title"] + " " + article["summary"]).lower()
+        text  = article["title"] + " " + article["summary"]
+        blob  = text.lower()
         score = sum(w for kw, w in kw_pairs if _kw_re(kw).search(blob))
 
         if score <= 0:
@@ -109,8 +110,8 @@ def correlate_news(
         src_weight  = SOURCE_WEIGHTS.get(article.get("source", ""), 1.0)
         final_score = round((score + recency_bonus) * src_weight, 2)
 
-        sentiment = score_sentiment(article["title"] + " " + article["summary"])
-        events    = detect_events(article["title"] + " " + article["summary"])
+        sentiment = score_sentiment(text)
+        events    = detect_events(text)
 
         matched.append({
             **article,

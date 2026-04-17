@@ -161,7 +161,7 @@ def compute_price_metrics(df: Optional[pd.DataFrame]) -> dict:
     def safe_pct(n: int) -> Optional[float]:
         if len(close) > n:
             old = float(close.iloc[-(n + 1)])
-            if old == 0 or not math.isfinite(old):
+            if abs(old) < 1e-9 or not math.isfinite(old):
                 return None
             pct = ((latest - old) / old) * 100
             return round(pct, 2) if math.isfinite(pct) else None
@@ -270,12 +270,8 @@ def compute_roc(series: pd.Series, period: int = 10) -> float:
         return 0.0
     old = float(series.iloc[-(period + 1)])
     new = float(series.iloc[-1])
-    if old == 0 or not math.isfinite(old) or not math.isfinite(new):
+    if abs(old) < 1e-9 or not math.isfinite(old) or not math.isfinite(new):
         return 0.0
     roc = ((new - old) / old) * 100
     return round(roc, 2) if math.isfinite(roc) else 0.0
 
-
-# Backward-compat aliases retained for older imports and tests.
-_compute_rsi = compute_rsi
-_compute_roc = compute_roc
