@@ -1,73 +1,48 @@
 """
-app.py — Backward-compatible re-export shim.
+app/analysis.py — Backward-compatible re-export shim.
 
-All domain logic now lives in src/:
-  src/price       — fetch_price_history, compute_price_metrics, compute_momentum_metrics
-  src/sentiment   — score_sentiment, VADER_AVAILABLE
-  src/news        — fetch_news_articles, deduplicate_articles, cluster_articles, get_display_clusters
-  src/signals     — correlate_news, detect_events, compute_signal_score
-  src/context     — analyse_market_context, find_category
-  src/explanation — build_explanation
-  src/engine      — analyse_asset, run_full_scan, fetch_all_metrics_parallel
+All domain logic now lives in pulseengine.core/. This file re-exports every name
+for backward compatibility with existing code (dashboard.py, scan.py, tests).
 
-This file re-exports every name that dashboard.py, scan.py, dashboard_data.py,
-and the test suite currently import from app, so those files continue to work
-without any changes.
-
-New code should import directly from the src/ modules.
+New code should import directly from pulseengine.core.
 """
 
-# ── Logging (kept here so `python app.py` still configures it) ───────────────
 import logging
 
-# ── Re-exports ────────────────────────────────────────────────────────────────
+# ── Re-exports from pulseengine.core ──────────────────────────────────────────
 
-from src.price import (  # noqa: F401
+from pulseengine.core import (  # noqa:F401
+    # Price
     fetch_price_history,
     compute_price_metrics,
     compute_momentum_metrics,
     compute_rsi,
     compute_roc,
     classify_trend,
-)
-
-from src.sentiment import (  # noqa: F401
+    # Sentiment
     VADER_AVAILABLE,
     score_sentiment,
     FINANCE_LEXICON,
-)
-
-from src.news import (  # noqa: F401
+    # News
     fetch_news_articles,
     deduplicate_articles,
     cluster_articles,
     get_display_clusters,
-    generate_keywords,
-)
-
-from src.signals import (  # noqa: F401
+    # Signals
     correlate_news,
     detect_events,
     compute_signal_score,
-)
-
-from src.context import (  # noqa: F401
+    # Context
     analyse_market_context,
     find_category,
-)
-
-from src.explanation import (  # noqa: F401
+    # Explanation
     build_explanation,
-)
-
-from src.errors import (  # noqa: F401
+    # Errors
     DataFetchError,
     PipelineError,
     SignalComputationError,
     StorageError,
-)
-
-from src.engine import (  # noqa: F401
+    # App
     analyse_asset,
     run_full_scan,
     fetch_all_metrics_parallel,
@@ -80,10 +55,14 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 
+# Backward-compat aliases retained for older imports and tests.
+_compute_rsi = compute_rsi
+_compute_roc = compute_roc
+
 # ── CLI entry point ───────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    from config.settings import TRACKED_ASSETS
+    from pulseengine.core import TRACKED_ASSETS
 
     print("=" * 60)
     print("  PulseEngine — CLI Test")
