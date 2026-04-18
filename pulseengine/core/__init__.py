@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 pulseengine.core — Headless market intelligence engine.
 
@@ -21,6 +19,8 @@ The v0.3 restructure establishes this foundation for future expansion:
 
 **Public API:**
 """
+
+from __future__ import annotations
 
 # Configuration
 from .config import (
