@@ -53,7 +53,6 @@ This document lists every significant constant, module-level variable, function 
 | `DASHBOARD_TITLE` | `str` | `"PulseEngine"` | Browser tab title and sidebar header. |
 | `DASHBOARD_ICON` | `str` | str — Absolute path to `assets/icons/favicon.ico` relative to the project root. Passed to `st.set_page_config` as the page icon. |
 | `DASHBOARD_LAYOUT` | `str` | `"wide"` | Streamlit page layout. |
-| `AUTO_REFRESH_SECONDS` | `int` | 90 | Page auto-refresh interval. Defined in config but controlled by `st.rerun` trigger. |
 | `CHART_HEIGHT` | `int` | 420 | Height in pixels for Plotly price charts. |
 | `DEFAULT_CATEGORY` | `str` | `"Commodities"` | Category selected on first load. |
 

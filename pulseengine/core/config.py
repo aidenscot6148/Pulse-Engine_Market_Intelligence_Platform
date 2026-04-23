@@ -299,7 +299,6 @@ RELEVANCE_MEDIUM = 3
 DASHBOARD_TITLE = "PulseEngine"
 
 DASHBOARD_LAYOUT = "wide"
-AUTO_REFRESH_SECONDS = 90   # refreshes every 90 seconds. like anxiety but automated and on a schedule
 CHART_HEIGHT = 420
 DEFAULT_CATEGORY = "Commodities"
 

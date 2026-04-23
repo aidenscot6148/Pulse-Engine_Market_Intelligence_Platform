@@ -441,7 +441,7 @@ with st.expander("Price Chart & Live Analysis", expanded=False):
                         except Exception as _ctx_exc:
                             st.warning(
                                 f"Market context analysis failed: {_ctx_exc}",
-                                icon="warning",
+                                icon="⚠️",
                             )
 
                 live_signal = compute_signal_score(

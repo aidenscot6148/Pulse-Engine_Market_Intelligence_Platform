@@ -1,5 +1,5 @@
 """
-src/engine.py — Pipeline orchestration.
+pulseengine/core/app.py — Pipeline orchestration.
 
 Single responsibility: coordinate all other modules to produce per-asset
 analysis results and drive the full market scan.
