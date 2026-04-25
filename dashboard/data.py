@@ -13,8 +13,23 @@ import logging
 import pandas as pd
 import streamlit as st
 
-from config.settings import NEWS_CACHE_TTL, PRICE_CACHE_TTL, SCAN_INTERVAL_MINUTES
-from app.analysis import fetch_news_articles, fetch_price_history, generate_keywords
+from config.settings import (
+    NEWS_CACHE_TTL,
+    PRICE_CACHE_TTL,
+    SCAN_INTERVAL_MINUTES,
+    TRACKED_ASSETS,
+)
+from app.analysis import (
+    analyse_market_context,
+    build_explanation,
+    compute_momentum_metrics,
+    compute_price_metrics,
+    compute_signal_score,
+    fetch_news_articles,
+    fetch_price_history,
+    generate_keywords,
+    correlate_news,
+)
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +63,94 @@ def cached_history(symbol: str) -> pd.DataFrame:
     # frozen as an empty DataFrame for the full TTL.
     result = fetch_price_history(symbol)
     return result if result is not None else pd.DataFrame()
+
+
+@st.cache_data(
+    ttl=min(NEWS_CACHE_TTL, PRICE_CACHE_TTL),
+    show_spinner="Building live analysis ...",
+)
+def cached_live_analysis(
+    asset_name: str,
+    ticker: str,
+    category: str,
+    news_loaded: bool,
+    run_context: bool,
+    scan_token: int = 0,
+    keywords: tuple[str, ...] = (),
+    price_cache_items: tuple[tuple[str, float], ...] = (),
+) -> dict:
+    """Build the live analysis payload for the selected asset.
+
+    The result is cached so reruns from unrelated UI changes reuse the same
+    expensive metrics, sentiment, and explanation work until the underlying
+    price/news TTLs or scan token change.
+    """
+    _ = scan_token
+
+    history = cached_history(ticker)
+    if history.empty:
+        return {
+            "error": f"Could not load price data for {asset_name} ({ticker}).",
+            "history": history,
+            "metrics": {},
+            "momentum": {},
+            "news": [],
+            "clusters": {},
+            "market_ctx": None,
+            "signal": {"score": 0.0, "label": "No Data"},
+            "explanation": {"verdict": "No price data available."},
+        }
+
+    articles = cached_news() if news_loaded else []
+    live_news = correlate_news(
+        asset_name,
+        articles,
+        keywords=list(keywords) if keywords else None,
+    )
+    live_metrics = compute_price_metrics(history)
+    live_momentum = compute_momentum_metrics(history)
+
+    market_ctx = None
+    if (
+        run_context
+        and category in TRACKED_ASSETS
+        and live_metrics.get("change_1d") is not None
+    ):
+        price_cache = dict(price_cache_items) if price_cache_items else None
+        market_ctx = analyse_market_context(
+            asset_name,
+            category,
+            live_metrics["change_1d"],
+            price_cache=price_cache,
+        )
+
+    live_signal = compute_signal_score(
+        live_metrics,
+        live_momentum,
+        live_news,
+        market_ctx,
+        category=category,
+    )
+    live_explanation = build_explanation(
+        asset_name,
+        live_metrics,
+        live_news,
+        market_ctx,
+        live_momentum,
+        live_signal,
+    )
+
+    return {
+        "error": None,
+        "history": history,
+        "metrics": live_metrics,
+        "momentum": live_momentum,
+        "news": live_news,
+        "clusters": {},
+        "market_ctx": market_ctx,
+        "signal": live_signal,
+        "explanation": live_explanation,
+    }
 
 
 @st.cache_data(ttl=SCAN_INTERVAL_MINUTES * 60)

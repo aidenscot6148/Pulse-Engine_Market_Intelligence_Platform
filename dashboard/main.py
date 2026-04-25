@@ -31,7 +31,6 @@ import re
 import threading
 import time
 
-import pandas as pd
 import streamlit as st
 
 from config.settings import (
@@ -50,17 +49,11 @@ from app.analysis import (
     VADER_AVAILABLE,
     correlate_news,
     get_display_clusters,
-    compute_price_metrics,
-    compute_momentum_metrics,
-    compute_signal_score,
-    build_explanation,
-    analyse_market_context,
 )
-from src.errors import DataFetchError
 from dashboard.data import (
     cached_generated_keywords,
     cached_news,
-    cached_history,
+    cached_live_analysis,
     cached_scan_summary,
     is_data_stale,
 )
@@ -197,6 +190,21 @@ _scan_refresh_epoch = int(st.session_state.get("_scan_refresh_epoch", 0))
 _summary         = cached_scan_summary(_scan_refresh_epoch)
 _summary_results = _summary.get("results", {})
 _summary_date    = _summary.get("scan_date", "")
+
+
+def _build_snapshot_price_cache(summary_results: dict) -> tuple[tuple[str, float], ...]:
+    """Build a hashable {ticker: change_1d} cache from the latest snapshot."""
+    cache_items: list[tuple[str, float]] = []
+    for category, assets in TRACKED_ASSETS.items():
+        category_rows = summary_results.get(category, {}) if isinstance(summary_results, dict) else {}
+        for asset_name, ticker in assets.items():
+            change_1d = category_rows.get(asset_name, {}).get("change_1d")
+            if change_1d is not None:
+                cache_items.append((ticker, float(change_1d)))
+    return tuple(cache_items)
+
+
+_snapshot_price_cache = _build_snapshot_price_cache(_summary_results)
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 
@@ -409,57 +417,28 @@ with st.expander("Price Chart & Live Analysis", expanded=using_custom_ticker):
             st.rerun()
     else:
         with st.spinner("Loading live analysis ..."):
-            try:
-                history = cached_history(ticker)
-            except DataFetchError as _price_exc:
-                log.warning("Price fetch failed for %s: %s", ticker, _price_exc)
-                history = pd.DataFrame()
-            if history.empty:
-                st.error(
-                    f"Could not load price data for **{selected_asset}** (`{ticker}`). "
-                    "Yahoo Finance may be temporarily unreachable. Try refreshing."
-                )
-            else:
-                live_metrics  = compute_price_metrics(history)
-                live_momentum = compute_momentum_metrics(history)
+            live_result = cached_live_analysis(
+                selected_asset,
+                ticker,
+                selected_category,
+                _news_loaded,
+                run_context,
+                scan_token=_scan_refresh_epoch,
+                keywords=tuple(_custom_keywords or ()),
+                price_cache_items=_snapshot_price_cache,
+            )
 
-                _live_articles: list[dict] = cached_news() if _news_loaded else []
-                live_news = correlate_news(
-                    selected_asset,
-                    _live_articles,
-                    keywords=_custom_keywords,
-                )
-
-                market_ctx = None
-                if (
-                    run_context
-                    and selected_category in TRACKED_ASSETS
-                    and live_metrics.get("change_1d") is not None
-                ):
-                    with st.spinner("Analysing market context (peers + benchmark) ..."):
-                        try:
-                            market_ctx = analyse_market_context(
-                                selected_asset, selected_category, live_metrics["change_1d"]
-                            )
-                        except Exception as _ctx_exc:
-                            st.warning(
-                                f"Market context analysis failed: {_ctx_exc}",
-                                icon="⚠️",
-                            )
-
-                live_signal = compute_signal_score(
-                    live_metrics, live_momentum, live_news, market_ctx,
-                    category=selected_category,
-                )
-                live_explanation = build_explanation(
-                    selected_asset, live_metrics, live_news, market_ctx,
-                    live_momentum, live_signal,
-                )
-
-                ui.render_live_analysis(
-                    history, selected_asset, live_signal, live_explanation,
-                    snap, is_significant,
-                )
+        if live_result.get("error"):
+            st.error(live_result["error"])
+        else:
+            ui.render_live_analysis(
+                live_result["history"],
+                selected_asset,
+                live_result["signal"],
+                live_result["explanation"],
+                snap,
+                is_significant,
+            )
 
 # SECTION 13 — Market heatmap
 st.markdown("---")
