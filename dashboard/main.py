@@ -364,15 +364,18 @@ _custom_keywords = (
 )
 
 
-# SECTION 1 — Signal card (snapshot)
-ui.render_signal_card(snap, selected_category, selected_asset, chg_1d, is_significant)
-
-# SECTION 2 — Why it matters (snapshot)
-ui.render_why_box(snap)
-
-# SECTION 3 — Metric cards + momentum row (snapshot)
-st.markdown("---")
-ui.render_snapshot_metrics(snap, chg_1d)
+# SECTION 1-3 — snapshot data (tracked assets only; custom tickers go straight to live analysis)
+if not using_custom_ticker:
+    ui.render_signal_card(snap, selected_category, selected_asset, chg_1d, is_significant)
+    ui.render_why_box(snap)
+    st.markdown("---")
+    ui.render_snapshot_metrics(snap, chg_1d)
+else:
+    # Kick off live data loading immediately so the analysis panel renders on the next rerun
+    # without requiring the user to open the expander and click a second button.
+    if not _live_loaded:
+        st.session_state["_live_for"] = ticker
+        st.rerun()
 
 # SECTION 4 — Related news (deferred behind explicit user action)
 st.markdown("---")
@@ -395,7 +398,7 @@ else:
 
 # SECTION 5 — Price chart & live analysis (deferred behind expander)
 st.markdown("---")
-with st.expander("Price Chart & Live Analysis", expanded=False):
+with st.expander("Price Chart & Live Analysis", expanded=using_custom_ticker):
     if not _live_loaded:
         st.caption(
             "Live price history and deep analysis are not fetched on startup. "
